@@ -4,5 +4,5 @@ mod matcher;
 mod parser;
 mod regex;
 
-pub use crate::error::Error;
-pub use crate::regex::{CaptureMatches, Captures, FindMatches, Match, Regex, Replacer, Split};
+pub use error::Error;
+pub use regex::{CaptureMatches, Captures, FindMatches, Match, Regex, Replacer, Split};

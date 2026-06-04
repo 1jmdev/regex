@@ -2,24 +2,37 @@ use crate::ast::Ast;
 
 pub type Slots = Vec<Option<(usize, usize)>>;
 
-pub fn find(ast: &Ast, haystack: &str, cap_count: usize, start_at: usize) -> Option<Slots> {
-    for start in starts(haystack, start_at) {
+pub fn find(ast: &Ast, haystack: &str, cap_count: usize, start_at: usize, prefix: Option<char>) -> Option<Slots> {
+    let mut start = start_at;
+    while start <= haystack.len() {
+        if let Some(c) = prefix {
+            start = next_literal_start(haystack, start, c)?;
+        }
         let mut slots = vec![None; cap_count + 1];
         slots[0] = Some((start, start));
         for (end, mut out) in matches(ast, haystack, start, slots) {
             out[0] = Some((start, end));
             return Some(out);
         }
+        start = advance(haystack, start);
     }
     None
 }
 
-fn starts(s: &str, start_at: usize) -> Vec<usize> {
-    s.char_indices()
-        .map(|(i, _)| i)
-        .chain(core::iter::once(s.len()))
-        .filter(|&i| i >= start_at)
-        .collect()
+fn next_literal_start(s: &str, start: usize, prefix: char) -> Option<usize> {
+    if prefix.is_ascii() {
+        s.get(start..)?.find(prefix).map(|i| start + i)
+    } else {
+        s.get(start..)?.char_indices().find_map(|(i, c)| (c == prefix).then_some(start + i))
+    }
+}
+
+fn advance(s: &str, pos: usize) -> usize {
+    if pos == s.len() {
+        pos + 1
+    } else {
+        pos + s[pos..].chars().next().map_or(1, char::len_utf8)
+    }
 }
 
 fn next_char(s: &str, pos: usize) -> Option<(char, usize)> {

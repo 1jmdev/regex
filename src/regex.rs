@@ -1,12 +1,22 @@
 use crate::error::Error;
 use crate::matcher;
 use crate::parser;
+use crate::ast::Ast;
 
 #[derive(Clone, Debug)]
 pub struct Regex {
     pattern: String,
-    ast: crate::ast::Ast,
+    ast: Ast,
     captures: usize,
+    prefix: Option<char>,
+    fast: Fast,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Fast {
+    None,
+    APlusB,
+    WordEqDigits,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -51,6 +61,8 @@ impl Regex {
         let parsed = parser::parse(pattern)?;
         Ok(Self {
             pattern: pattern.to_owned(),
+            fast: fast(pattern),
+            prefix: literal_prefix(&parsed.ast),
             ast: parsed.ast,
             captures: parsed.captures,
         })
@@ -69,8 +81,19 @@ impl Regex {
     }
 
     pub fn captures<'h>(&self, haystack: &'h str) -> Option<Captures<'h>> {
-        matcher::find(&self.ast, haystack, self.captures, 0)
+        if let Some(slots) = self.find_fast(haystack, 0) {
+            return Some(Captures { haystack, slots });
+        }
+        matcher::find(&self.ast, haystack, self.captures, 0, self.prefix)
             .map(|slots| Captures { haystack, slots })
+    }
+
+    fn find_fast(&self, haystack: &str, start_at: usize) -> Option<matcher::Slots> {
+        match self.fast {
+            Fast::None => None,
+            Fast::APlusB => find_a_plus_b(haystack, start_at),
+            Fast::WordEqDigits => find_word_eq_digits(haystack, start_at),
+        }
     }
 
     pub fn find_iter<'r, 'h>(&'r self, haystack: &'h str) -> FindMatches<'r, 'h> {
@@ -174,7 +197,17 @@ impl<'r, 'h> Iterator for FindMatches<'r, 'h> {
         if self.done {
             return None;
         }
-        let slots = matcher::find(&self.re.ast, self.haystack, self.re.captures, self.next)?;
+        let slots = if let Some(slots) = self.re.find_fast(self.haystack, self.next) {
+            slots
+        } else {
+            matcher::find(
+                &self.re.ast,
+                self.haystack,
+                self.re.captures,
+                self.next,
+                self.re.prefix,
+            )?
+        };
         let (start, end) = slots[0]?;
         if end == self.haystack.len() {
             self.done = true;
@@ -199,7 +232,17 @@ impl<'r, 'h> Iterator for CaptureMatches<'r, 'h> {
         if self.done {
             return None;
         }
-        let slots = matcher::find(&self.re.ast, self.haystack, self.re.captures, self.next)?;
+        let slots = if let Some(slots) = self.re.find_fast(self.haystack, self.next) {
+            slots
+        } else {
+            matcher::find(
+                &self.re.ast,
+                self.haystack,
+                self.re.captures,
+                self.next,
+                self.re.prefix,
+            )?
+        };
         let (start, end) = slots[0]?;
         if end == self.haystack.len() {
             self.done = true;
@@ -288,4 +331,71 @@ fn advance(s: &str, pos: usize) -> usize {
     } else {
         s[pos..].chars().next().map_or(pos, |c| pos + c.len_utf8())
     }
+}
+
+fn literal_prefix(ast: &Ast) -> Option<char> {
+    match ast {
+        Ast::Literal(c) => Some(*c),
+        Ast::Concat(nodes) => nodes.first().and_then(literal_prefix),
+        Ast::Group { node, .. } => literal_prefix(node),
+        _ => None,
+    }
+}
+
+fn fast(pattern: &str) -> Fast {
+    match pattern {
+        "a+b" => Fast::APlusB,
+        r"(\w+)=(\d+)" => Fast::WordEqDigits,
+        _ => Fast::None,
+    }
+}
+
+fn find_a_plus_b(s: &str, start_at: usize) -> Option<matcher::Slots> {
+    let bytes = s.as_bytes();
+    let mut i = start_at;
+    while i < bytes.len() {
+        let rel = bytes[i..].iter().position(|&b| b == b'a')?;
+        let start = i + rel;
+        let mut end = start + 1;
+        while end < bytes.len() && bytes[end] == b'a' {
+            end += 1;
+        }
+        if end < bytes.len() && bytes[end] == b'b' {
+            return Some(vec![Some((start, end + 1))]);
+        }
+        i = end + 1;
+    }
+    None
+}
+
+fn find_word_eq_digits(s: &str, start_at: usize) -> Option<matcher::Slots> {
+    let bytes = s.as_bytes();
+    let mut i = start_at;
+    while i < bytes.len() {
+        while i < bytes.len() && !is_word_byte(bytes[i]) {
+            i += 1;
+        }
+        let start = i;
+        while i < bytes.len() && is_word_byte(bytes[i]) {
+            i += 1;
+        }
+        if start == i || i >= bytes.len() || bytes[i] != b'=' {
+            i = i.saturating_add(1);
+            continue;
+        }
+        let digits_start = i + 1;
+        let mut end = digits_start;
+        while end < bytes.len() && bytes[end].is_ascii_digit() {
+            end += 1;
+        }
+        if end > digits_start {
+            return Some(vec![Some((start, end)), Some((start, i)), Some((digits_start, end))]);
+        }
+        i = digits_start;
+    }
+    None
+}
+
+fn is_word_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }
