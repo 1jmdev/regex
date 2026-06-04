@@ -119,7 +119,7 @@ impl Regex {
         }
     }
 
-    pub fn replace<'h, R: Replacer>(&self, haystack: &'h str, mut rep: R) -> String {
+    pub fn replace<R: Replacer>(&self, haystack: &str, mut rep: R) -> String {
         let Some(caps) = self.captures(haystack) else {
             return haystack.to_owned();
         };
@@ -131,7 +131,7 @@ impl Regex {
         dst
     }
 
-    pub fn replace_all<'h, R: Replacer>(&self, haystack: &'h str, mut rep: R) -> String {
+    pub fn replace_all<R: Replacer>(&self, haystack: &str, mut rep: R) -> String {
         let mut dst = String::new();
         let mut last = 0;
         for caps in self.captures_iter(haystack) {

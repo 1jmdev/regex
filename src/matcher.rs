@@ -16,7 +16,7 @@ pub fn find(
         }
         let mut slots = vec![None; cap_count + 1];
         slots[0] = Some((start, start));
-        for (end, mut out) in matches(ast, haystack, start, slots) {
+        if let Some((end, mut out)) = matches(ast, haystack, start, slots).into_iter().next() {
             out[0] = Some((start, end));
             return Some(out);
         }

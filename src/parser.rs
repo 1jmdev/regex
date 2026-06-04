@@ -120,10 +120,10 @@ impl Parser {
         if !self.eat('}') {
             return Err(Error::new("unclosed repetition"));
         }
-        if let Some(max) = max {
-            if max < min {
-                return Err(Error::new("invalid repetition range"));
-            }
+        if let Some(max) = max
+            && max < min
+        {
+            return Err(Error::new("invalid repetition range"));
         }
         Ok((min, max))
     }
