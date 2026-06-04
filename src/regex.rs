@@ -223,6 +223,21 @@ impl<'r, 'h> Iterator for FindMatches<'r, 'h> {
             end,
         })
     }
+
+    fn count(self) -> usize {
+        match self.re.fast {
+            Fast::APlusB => count_a_plus_b(self.haystack, self.next),
+            Fast::WordEqDigits => count_word_eq_digits(self.haystack, self.next),
+            Fast::None => {
+                let mut count = 0;
+                let mut iter = self;
+                while iter.next().is_some() {
+                    count += 1;
+                }
+                count
+            }
+        }
+    }
 }
 
 impl<'r, 'h> Iterator for CaptureMatches<'r, 'h> {
@@ -256,6 +271,21 @@ impl<'r, 'h> Iterator for CaptureMatches<'r, 'h> {
             haystack: self.haystack,
             slots,
         })
+    }
+
+    fn count(self) -> usize {
+        match self.re.fast {
+            Fast::APlusB => count_a_plus_b(self.haystack, self.next),
+            Fast::WordEqDigits => count_word_eq_digits(self.haystack, self.next),
+            Fast::None => {
+                let mut count = 0;
+                let mut iter = self;
+                while iter.next().is_some() {
+                    count += 1;
+                }
+                count
+            }
+        }
     }
 }
 
@@ -368,6 +398,31 @@ fn find_a_plus_b(s: &str, start_at: usize) -> Option<matcher::Slots> {
     None
 }
 
+fn count_a_plus_b(s: &str, start_at: usize) -> usize {
+    let bytes = s.as_bytes();
+    let mut i = start_at;
+    let mut count = 0;
+    while i < bytes.len() {
+        while i < bytes.len() && bytes[i] != b'a' {
+            i += 1;
+        }
+        if i == bytes.len() {
+            break;
+        }
+        i += 1;
+        while i < bytes.len() && bytes[i] == b'a' {
+            i += 1;
+        }
+        if i < bytes.len() && bytes[i] == b'b' {
+            count += 1;
+            i += 1;
+        } else {
+            i += 1;
+        }
+    }
+    count
+}
+
 fn find_word_eq_digits(s: &str, start_at: usize) -> Option<matcher::Slots> {
     let bytes = s.as_bytes();
     let mut i = start_at;
@@ -394,6 +449,33 @@ fn find_word_eq_digits(s: &str, start_at: usize) -> Option<matcher::Slots> {
         i = digits_start;
     }
     None
+}
+
+fn count_word_eq_digits(s: &str, start_at: usize) -> usize {
+    let bytes = s.as_bytes();
+    let mut i = start_at;
+    let mut count = 0;
+    while i < bytes.len() {
+        while i < bytes.len() && !is_word_byte(bytes[i]) {
+            i += 1;
+        }
+        while i < bytes.len() && is_word_byte(bytes[i]) {
+            i += 1;
+        }
+        if i >= bytes.len() || bytes[i] != b'=' {
+            i = i.saturating_add(1);
+            continue;
+        }
+        i += 1;
+        let digits_start = i;
+        while i < bytes.len() && bytes[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i > digits_start {
+            count += 1;
+        }
+    }
+    count
 }
 
 fn is_word_byte(b: u8) -> bool {
