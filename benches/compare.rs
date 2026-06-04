@@ -33,14 +33,14 @@ fn bench_small(c: &mut Criterion) {
     let haystack = "x=12 y=345 z=6789";
 
     group.bench_function("ours captures", |b| {
-        b.iter(|| black_box(ours.captures(black_box(haystack)).map(|c| c[2].to_string())))
+        b.iter(|| black_box(ours.captures(black_box(haystack)).map(|c| c[2].len())))
     });
     group.bench_function("rust-regex captures", |b| {
         b.iter(|| {
             black_box(
                 official
                     .captures(black_box(haystack))
-                    .map(|c| c[2].to_string()),
+                    .map(|c| c[2].len()),
             )
         })
     });
