@@ -1,4 +1,4 @@
-use fast_reg::Regex;
+use fast_reg::{Regex, RegexSet};
 
 #[test]
 fn literal_and_dot() {
@@ -164,4 +164,24 @@ fn parse_errors() {
     assert!(Regex::new("[").is_err());
     assert!(Regex::new("a{3,2}").is_err());
     assert!(Regex::new("*").is_err());
+}
+
+#[test]
+fn regex_set_reports_matching_pattern_indexes() {
+    let set = RegexSet::new([r"\d+", r"\w+", r"^foo", r"bar$"]).unwrap();
+    let matches = set.matches("foo 123");
+
+    assert_eq!(set.len(), 4);
+    assert_eq!(set.patterns(), &[r"\d+", r"\w+", r"^foo", r"bar$"]);
+    assert!(set.is_match("foo 123"));
+    assert!(!set.is_match("!!!"));
+    assert!(matches.matched_any());
+    assert!(matches.matched(0));
+    assert!(matches.matched(1));
+    assert!(matches.matched(2));
+    assert!(!matches.matched(3));
+    assert!(!matches.matched(99));
+    assert_eq!(matches.iter().collect::<Vec<_>>(), vec![0, 1, 2]);
+    assert_eq!((&matches).into_iter().collect::<Vec<_>>(), vec![0, 1, 2]);
+    assert_eq!(matches.into_iter().collect::<Vec<_>>(), vec![0, 1, 2]);
 }

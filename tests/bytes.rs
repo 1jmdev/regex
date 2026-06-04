@@ -1,4 +1,4 @@
-use fast_reg::bytes::Regex;
+use fast_reg::bytes::{Regex, RegexSet};
 
 fn assert_same(pattern: &str, haystack: &[u8]) {
     let fast = Regex::new(pattern).unwrap();
@@ -97,4 +97,24 @@ fn bytes_utf8_pattern_literals_match_encoded_bytes() {
     let m = re.find("xéé".as_bytes()).unwrap();
     assert_eq!(m.as_bytes(), "éé".as_bytes());
     assert_eq!(m.range(), 1..5);
+}
+
+#[test]
+fn bytes_regex_set_reports_matching_pattern_indexes() {
+    let set = RegexSet::new([r"\d+", r"\w+", r"^foo", r"bar$"]).unwrap();
+    let matches = set.matches(b"foo 123");
+
+    assert_eq!(set.len(), 4);
+    assert_eq!(set.patterns(), &[r"\d+", r"\w+", r"^foo", r"bar$"]);
+    assert!(set.is_match(b"foo 123"));
+    assert!(!set.is_match(b"!!!"));
+    assert!(matches.matched_any());
+    assert!(matches.matched(0));
+    assert!(matches.matched(1));
+    assert!(matches.matched(2));
+    assert!(!matches.matched(3));
+    assert!(!matches.matched(99));
+    assert_eq!(matches.iter().collect::<Vec<_>>(), vec![0, 1, 2]);
+    assert_eq!((&matches).into_iter().collect::<Vec<_>>(), vec![0, 1, 2]);
+    assert_eq!(matches.into_iter().collect::<Vec<_>>(), vec![0, 1, 2]);
 }
