@@ -11,6 +11,7 @@ pub fn parse(pattern: &str) -> Result<Parsed, Error> {
         chars: pattern.chars().collect(),
         pos: 0,
         captures: 0,
+        case_insensitive: false,
     };
     let ast = p.parse_alt()?;
     if p.peek().is_some() {
@@ -26,6 +27,7 @@ struct Parser {
     chars: Vec<char>,
     pos: usize,
     captures: usize,
+    case_insensitive: bool,
 }
 
 impl Parser {
@@ -154,6 +156,10 @@ impl Parser {
             '$' => Ok(Ast::EndLine),
             '(' => {
                 if self.eat('?') {
+                    if self.eat('i') && self.eat(')') {
+                        self.case_insensitive = true;
+                        return Ok(Ast::Empty);
+                    }
                     return Err(Error::new("unsupported group syntax"));
                 }
                 self.captures += 1;
@@ -171,7 +177,21 @@ impl Parser {
             '\\' => self.parse_escape(false),
             ')' | '|' => Err(Error::new("unexpected metacharacter")),
             '*' | '+' | '?' | '{' => Err(Error::new("repetition missing expression")),
-            c => Ok(Ast::Literal(c)),
+            c => Ok(self.literal(c)),
+        }
+    }
+
+    fn literal(&self, c: char) -> Ast {
+        if self.case_insensitive && c.is_ascii_alphabetic() {
+            Ast::Class(Class {
+                negated: false,
+                items: vec![
+                    ClassItem::Char(c.to_ascii_lowercase()),
+                    ClassItem::Char(c.to_ascii_uppercase()),
+                ],
+            })
+        } else {
+            Ast::Literal(c)
         }
     }
 
@@ -207,7 +227,7 @@ impl Parser {
             'n' => Ast::Literal('\n'),
             'r' => Ast::Literal('\r'),
             't' => Ast::Literal('\t'),
-            c => Ast::Literal(c),
+            c => self.literal(c),
         })
     }
 
@@ -232,15 +252,40 @@ impl Parser {
                 let end = self.class_item()?;
                 match (start, end) {
                     (ClassItem::Char(a), ClassItem::Char(b)) if a <= b => {
-                        items.push(ClassItem::Range(a, b))
+                        self.push_class_range(&mut items, a, b)
                     }
                     _ => return Err(Error::new("invalid character class range")),
                 }
             } else {
-                items.push(start);
+                self.push_class_item(&mut items, start);
             }
         }
         Err(Error::new("unclosed character class"))
+    }
+
+    fn push_class_item(&self, items: &mut Vec<ClassItem>, item: ClassItem) {
+        match item {
+            ClassItem::Char(c) if self.case_insensitive && c.is_ascii_alphabetic() => {
+                items.push(ClassItem::Char(c.to_ascii_lowercase()));
+                items.push(ClassItem::Char(c.to_ascii_uppercase()));
+            }
+            item => items.push(item),
+        }
+    }
+
+    fn push_class_range(&self, items: &mut Vec<ClassItem>, a: char, b: char) {
+        items.push(ClassItem::Range(a, b));
+        if self.case_insensitive && a.is_ascii_lowercase() && b.is_ascii_lowercase() {
+            items.push(ClassItem::Range(
+                a.to_ascii_uppercase(),
+                b.to_ascii_uppercase(),
+            ));
+        } else if self.case_insensitive && a.is_ascii_uppercase() && b.is_ascii_uppercase() {
+            items.push(ClassItem::Range(
+                a.to_ascii_lowercase(),
+                b.to_ascii_lowercase(),
+            ));
+        }
     }
 
     fn class_item(&mut self) -> Result<ClassItem, Error> {

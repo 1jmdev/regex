@@ -25,6 +25,90 @@ fn generated_literal(bytes: usize) -> String {
     text
 }
 
+fn generated_mixed(bytes: usize) -> String {
+    let mut text = String::with_capacity(bytes + 64);
+    let words = ["alpha", "ERROR", "beta_42", "warning", "Error", "delta99"];
+    let mut i = 0usize;
+    while text.len() < bytes {
+        text.push_str(words[i % words.len()]);
+        text.push(' ');
+        text.push_str(&format!("{:04}", i % 10000));
+        text.push(' ');
+        i += 1;
+    }
+    text
+}
+
+struct Case<'a> {
+    name: &'a str,
+    pattern: &'a str,
+    haystack: String,
+}
+
+fn bench_pattern_matrix(c: &mut Criterion) {
+    let cases = [
+        Case {
+            name: "simple digits",
+            pattern: r"\d+",
+            haystack: generated_mixed(100_000),
+        },
+        Case {
+            name: "simple words",
+            pattern: r"\w+",
+            haystack: generated_mixed(100_000),
+        },
+        Case {
+            name: "simple alpha underscore",
+            pattern: r"[a-zA-Z_]+",
+            haystack: generated_mixed(100_000),
+        },
+        Case {
+            name: "bounded exact digits",
+            pattern: r"\d{4}",
+            haystack: generated_mixed(100_000),
+        },
+        Case {
+            name: "bounded open words",
+            pattern: r"\w{2,}",
+            haystack: generated_mixed(100_000),
+        },
+        Case {
+            name: "case insensitive error",
+            pattern: r"(?i)error",
+            haystack: generated_mixed(100_000),
+        },
+        Case {
+            name: "backtracking alternation",
+            pattern: r"(a|aa)+b",
+            haystack: generated_literal(10_000),
+        },
+        Case {
+            name: "backtracking nested repeat",
+            pattern: r"(a+)+b",
+            haystack: generated_literal(10_000),
+        },
+    ];
+
+    for case in cases {
+        let ours = Regex::new(case.pattern).unwrap();
+        let official = RustRegex::new(case.pattern).unwrap();
+
+        let mut group = c.benchmark_group(format!("pattern matrix/{}", case.name));
+        group.throughput(Throughput::Bytes(case.haystack.len() as u64));
+        group.bench_with_input(
+            BenchmarkId::new("ours find_iter", case.pattern),
+            &case.haystack,
+            |b, h| b.iter(|| black_box(ours.find_iter(black_box(h)).count())),
+        );
+        group.bench_with_input(
+            BenchmarkId::new("rust-regex find_iter", case.pattern),
+            &case.haystack,
+            |b, h| b.iter(|| black_box(official.find_iter(black_box(h)).count())),
+        );
+        group.finish();
+    }
+}
+
 fn bench_small(c: &mut Criterion) {
     let mut group = c.benchmark_group("small");
 
@@ -97,5 +181,5 @@ fn bench_large(c: &mut Criterion) {
     }
 }
 
-criterion_group!(benches, bench_small, bench_large);
+criterion_group!(benches, bench_small, bench_large, bench_pattern_matrix);
 criterion_main!(benches);

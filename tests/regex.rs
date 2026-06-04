@@ -66,6 +66,52 @@ fn character_classes() {
 }
 
 #[test]
+fn case_insensitive_flag() {
+    assert!(Regex::new(r"(?i)error").unwrap().is_match("ERROR"));
+    assert!(Regex::new(r"(?i)[a-z]+").unwrap().is_match("ABC"));
+    assert!(!Regex::new(r"(?i)error").unwrap().is_match("warning"));
+}
+
+#[test]
+fn fast_pattern_counts() {
+    assert_eq!(Regex::new(r"\d+").unwrap().find_iter("a12 b345").count(), 2);
+    assert_eq!(Regex::new(r"\w+").unwrap().find_iter("a12 b_3!").count(), 2);
+    assert_eq!(
+        Regex::new(r"[a-zA-Z_]+")
+            .unwrap()
+            .find_iter("a12 b_3!")
+            .count(),
+        2
+    );
+    assert_eq!(
+        Regex::new(r"\d{4}").unwrap().find_iter("123456789").count(),
+        2
+    );
+    assert_eq!(
+        Regex::new(r"\w{2,}").unwrap().find_iter("a ab cde").count(),
+        2
+    );
+    assert_eq!(
+        Regex::new(r"(?i)error")
+            .unwrap()
+            .find_iter("error ERROR Error warning")
+            .count(),
+        3
+    );
+    assert_eq!(
+        Regex::new(r"(a|aa)+b")
+            .unwrap()
+            .find_iter("aaab aab")
+            .count(),
+        2
+    );
+    assert_eq!(
+        Regex::new(r"(a+)+b").unwrap().find_iter("aaab aab").count(),
+        2
+    );
+}
+
+#[test]
 fn word_boundaries() {
     assert!(Regex::new(r"\bcat\b").unwrap().is_match("a cat!"));
     assert!(!Regex::new(r"\bcat\b").unwrap().is_match("scatter"));
