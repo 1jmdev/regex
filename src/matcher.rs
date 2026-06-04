@@ -1,7 +1,13 @@
 use crate::ast::Ast;
 
+/// A slot vector holding `(start, end)` pairs for each capture group (index 0 = whole match).
 pub type Slots = Vec<Option<(usize, usize)>>;
 
+/// Searches `haystack` for the leftmost match of `ast` starting no earlier than `start_at`.
+///
+/// Returns the populated slot vector on success, or `None` if there is no match.
+/// `cap_count` must equal the number of capture groups in `ast` (not counting group 0).
+/// `prefix` is an optional first-character hint used to skip ahead quickly.
 pub fn find(
     ast: &Ast,
     haystack: &str,
@@ -25,6 +31,7 @@ pub fn find(
     None
 }
 
+/// Finds the next position `>= start` where `prefix` appears in `s`.
 fn next_literal_start(s: &str, start: usize, prefix: char) -> Option<usize> {
     if prefix.is_ascii() {
         s.get(start..)?.find(prefix).map(|i| start + i)
@@ -35,6 +42,7 @@ fn next_literal_start(s: &str, start: usize, prefix: char) -> Option<usize> {
     }
 }
 
+/// Advances `pos` past the next UTF-8 character, stepping by 1 at end of string.
 fn advance(s: &str, pos: usize) -> usize {
     if pos == s.len() {
         pos + 1
@@ -43,6 +51,7 @@ fn advance(s: &str, pos: usize) -> usize {
     }
 }
 
+/// Returns the character at `pos` and the offset of the following character.
 fn next_char(s: &str, pos: usize) -> Option<(char, usize)> {
     s.get(pos..)?
         .chars()
@@ -50,14 +59,17 @@ fn next_char(s: &str, pos: usize) -> Option<(char, usize)> {
         .map(|c| (c, pos + c.len_utf8()))
 }
 
+/// Returns the character immediately before `pos`, or `None` at the start.
 fn prev_char(s: &str, pos: usize) -> Option<char> {
     s.get(..pos)?.chars().next_back()
 }
 
+/// Returns `true` if `c` is an ASCII word character (`[a-zA-Z0-9_]`).
 fn is_word(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
+/// Returns all ways `ast` can match starting at `pos`, each as `(end_pos, slots)`.
 pub fn matches(ast: &Ast, s: &str, pos: usize, slots: Slots) -> Vec<(usize, Slots)> {
     match ast {
         Ast::Empty => vec![(pos, slots)],
@@ -117,6 +129,7 @@ pub fn matches(ast: &Ast, s: &str, pos: usize, slots: Slots) -> Vec<(usize, Slot
     }
 }
 
+/// Matches a sequence of nodes left-to-right, threading slots through each step.
 fn match_concat(nodes: &[Ast], s: &str, pos: usize, slots: Slots) -> Vec<(usize, Slots)> {
     if let Some((first, rest)) = nodes.split_first() {
         matches(first, s, pos, slots)
@@ -128,6 +141,7 @@ fn match_concat(nodes: &[Ast], s: &str, pos: usize, slots: Slots) -> Vec<(usize,
     }
 }
 
+/// Entry point for repetition: collects results then reverses order for greedy matches.
 fn repeat(
     node: &Ast,
     s: &str,
@@ -145,6 +159,7 @@ fn repeat(
     out
 }
 
+/// Recursive helper that enumerates all valid repetition counts into `out`.
 fn repeat_inner(
     node: &Ast,
     s: &str,

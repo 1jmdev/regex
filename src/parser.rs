@@ -1,11 +1,13 @@
 use crate::ast::{Ast, Class, ClassItem};
 use crate::error::Error;
 
+/// The result of a successful parse: an AST and the number of capture groups.
 pub struct Parsed {
     pub ast: Ast,
     pub captures: usize,
 }
 
+/// Parses `pattern` into a [`Parsed`] AST, returning an [`Error`] on invalid syntax.
 pub fn parse(pattern: &str) -> Result<Parsed, Error> {
     let mut p = Parser {
         chars: pattern.chars().collect(),
@@ -23,6 +25,7 @@ pub fn parse(pattern: &str) -> Result<Parsed, Error> {
     })
 }
 
+/// Recursive-descent parser that walks the character stream.
 struct Parser {
     chars: Vec<char>,
     pos: usize,
@@ -31,14 +34,19 @@ struct Parser {
 }
 
 impl Parser {
+    /// Returns the current character without consuming it.
     fn peek(&self) -> Option<char> {
         self.chars.get(self.pos).copied()
     }
+
+    /// Consumes and returns the current character.
     fn bump(&mut self) -> Option<char> {
         let c = self.peek()?;
         self.pos += 1;
         Some(c)
     }
+
+    /// Consumes the current character if it equals `c`, returning whether it matched.
     fn eat(&mut self, c: char) -> bool {
         if self.peek() == Some(c) {
             self.pos += 1;
@@ -48,6 +56,7 @@ impl Parser {
         }
     }
 
+    /// Parses a `|`-separated alternation.
     fn parse_alt(&mut self) -> Result<Ast, Error> {
         let mut parts = vec![self.parse_concat()?];
         while self.eat('|') {
@@ -60,6 +69,7 @@ impl Parser {
         })
     }
 
+    /// Parses a sequence of atoms until a `|`, `)`, or end of input.
     fn parse_concat(&mut self) -> Result<Ast, Error> {
         let mut parts = Vec::new();
         while let Some(c) = self.peek() {
@@ -75,6 +85,7 @@ impl Parser {
         })
     }
 
+    /// Parses an atom followed by an optional repetition quantifier.
     fn parse_repeat(&mut self) -> Result<Ast, Error> {
         let mut node = self.parse_atom()?;
         loop {
@@ -105,6 +116,7 @@ impl Parser {
         Ok(node)
     }
 
+    /// Parses a `{min,max}` repetition bound.
     fn parse_braces(&mut self) -> Result<(usize, Option<usize>), Error> {
         self.bump();
         let min = self.number()?;
@@ -128,6 +140,7 @@ impl Parser {
         Ok((min, max))
     }
 
+    /// Parses a decimal integer from the current position.
     fn number(&mut self) -> Result<usize, Error> {
         let start = self.pos;
         let mut n = 0usize;
@@ -146,6 +159,7 @@ impl Parser {
         }
     }
 
+    /// Parses a single atom: literal, metacharacter, group, class, or escape.
     fn parse_atom(&mut self) -> Result<Ast, Error> {
         match self
             .bump()
@@ -181,6 +195,7 @@ impl Parser {
         }
     }
 
+    /// Wraps `c` in a two-char class when case-insensitive mode is active.
     fn literal(&self, c: char) -> Ast {
         if self.case_insensitive && c.is_ascii_alphabetic() {
             Ast::Class(Class {
@@ -195,6 +210,7 @@ impl Parser {
         }
     }
 
+    /// Parses the character following a `\`.
     fn parse_escape(&mut self, in_class: bool) -> Result<Ast, Error> {
         let c = self.bump().ok_or_else(|| Error::new("dangling escape"))?;
         Ok(match c {
@@ -231,6 +247,7 @@ impl Parser {
         })
     }
 
+    /// Parses a `[...]` character class body.
     fn parse_class(&mut self) -> Result<Ast, Error> {
         let negated = self.eat('^');
         let mut items = Vec::new();
@@ -263,6 +280,7 @@ impl Parser {
         Err(Error::new("unclosed character class"))
     }
 
+    /// Appends `item` to `items`, expanding both cases when case-insensitive.
     fn push_class_item(&self, items: &mut Vec<ClassItem>, item: ClassItem) {
         match item {
             ClassItem::Char(c) if self.case_insensitive && c.is_ascii_alphabetic() => {
@@ -273,6 +291,7 @@ impl Parser {
         }
     }
 
+    /// Appends a range to `items`, adding the opposite-case range when case-insensitive.
     fn push_class_range(&self, items: &mut Vec<ClassItem>, a: char, b: char) {
         items.push(ClassItem::Range(a, b));
         if self.case_insensitive && a.is_ascii_lowercase() && b.is_ascii_lowercase() {
@@ -288,6 +307,7 @@ impl Parser {
         }
     }
 
+    /// Parses a single item inside a character class, handling `\` escapes.
     fn class_item(&mut self) -> Result<ClassItem, Error> {
         match self
             .bump()
