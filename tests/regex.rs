@@ -24,11 +24,38 @@ fn alternation_and_groups() {
 
 #[test]
 fn repetitions() {
-    assert_eq!(Regex::new("ab*c").unwrap().find("xxabbbc").unwrap().as_str(), "abbbc");
-    assert_eq!(Regex::new("ab+c").unwrap().find("xxabbc").unwrap().as_str(), "abbc");
-    assert_eq!(Regex::new("ab{2,3}c").unwrap().find("abbbc").unwrap().as_str(), "abbbc");
-    assert_eq!(Regex::new("ab{2}c").unwrap().find("abbc").unwrap().as_str(), "abbc");
-    assert_eq!(Regex::new("a.*?c").unwrap().find("a123c456c").unwrap().as_str(), "a123c");
+    assert_eq!(
+        Regex::new("ab*c")
+            .unwrap()
+            .find("xxabbbc")
+            .unwrap()
+            .as_str(),
+        "abbbc"
+    );
+    assert_eq!(
+        Regex::new("ab+c").unwrap().find("xxabbc").unwrap().as_str(),
+        "abbc"
+    );
+    assert_eq!(
+        Regex::new("ab{2,3}c")
+            .unwrap()
+            .find("abbbc")
+            .unwrap()
+            .as_str(),
+        "abbbc"
+    );
+    assert_eq!(
+        Regex::new("ab{2}c").unwrap().find("abbc").unwrap().as_str(),
+        "abbc"
+    );
+    assert_eq!(
+        Regex::new("a.*?c")
+            .unwrap()
+            .find("a123c456c")
+            .unwrap()
+            .as_str(),
+        "a123c"
+    );
 }
 
 #[test]
@@ -47,13 +74,21 @@ fn word_boundaries() {
 
 #[test]
 fn find_iter_handles_empty_matches() {
-    let found: Vec<_> = Regex::new("a*").unwrap().find_iter("bbb").map(|m| m.as_str().to_string()).collect();
+    let found: Vec<_> = Regex::new("a*")
+        .unwrap()
+        .find_iter("bbb")
+        .map(|m| m.as_str().to_string())
+        .collect();
     assert_eq!(found, vec!["", "", "", ""]);
 }
 
 #[test]
 fn captures_iter() {
-    let found: Vec<_> = Regex::new(r"(\d+)").unwrap().captures_iter("a1 b22").map(|c| c[1].to_string()).collect();
+    let found: Vec<_> = Regex::new(r"(\d+)")
+        .unwrap()
+        .captures_iter("a1 b22")
+        .map(|c| c[1].to_string())
+        .collect();
     assert_eq!(found, vec!["1", "22"]);
 }
 

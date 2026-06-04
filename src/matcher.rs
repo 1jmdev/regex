@@ -15,11 +15,18 @@ pub fn find(ast: &Ast, haystack: &str, cap_count: usize, start_at: usize) -> Opt
 }
 
 fn starts(s: &str, start_at: usize) -> Vec<usize> {
-    s.char_indices().map(|(i, _)| i).chain(core::iter::once(s.len())).filter(|&i| i >= start_at).collect()
+    s.char_indices()
+        .map(|(i, _)| i)
+        .chain(core::iter::once(s.len()))
+        .filter(|&i| i >= start_at)
+        .collect()
 }
 
 fn next_char(s: &str, pos: usize) -> Option<(char, usize)> {
-    s.get(pos..)?.chars().next().map(|c| (c, pos + c.len_utf8()))
+    s.get(pos..)?
+        .chars()
+        .next()
+        .map(|c| (c, pos + c.len_utf8()))
 }
 
 fn prev_char(s: &str, pos: usize) -> Option<char> {
@@ -45,39 +52,88 @@ pub fn matches(ast: &Ast, s: &str, pos: usize, slots: Slots) -> Vec<(usize, Slot
             Some((c, end)) if class.matches(c) => vec![(end, slots)],
             _ => Vec::new(),
         },
-        Ast::StartLine => if pos == 0 { vec![(pos, slots)] } else { Vec::new() },
-        Ast::EndLine => if pos == s.len() { vec![(pos, slots)] } else { Vec::new() },
+        Ast::StartLine => {
+            if pos == 0 {
+                vec![(pos, slots)]
+            } else {
+                Vec::new()
+            }
+        }
+        Ast::EndLine => {
+            if pos == s.len() {
+                vec![(pos, slots)]
+            } else {
+                Vec::new()
+            }
+        }
         Ast::WordBoundary(want) => {
             let left = prev_char(s, pos).is_some_and(is_word);
             let right = next_char(s, pos).is_some_and(|(c, _)| is_word(c));
-            if (left != right) == *want { vec![(pos, slots)] } else { Vec::new() }
+            if (left != right) == *want {
+                vec![(pos, slots)]
+            } else {
+                Vec::new()
+            }
         }
         Ast::Concat(nodes) => match_concat(nodes, s, pos, slots),
-        Ast::Alt(nodes) => nodes.iter().flat_map(|n| matches(n, s, pos, slots.clone())).collect(),
-        Ast::Repeat { node, min, max, greedy } => repeat(node, s, pos, slots, *min, *max, *greedy),
-        Ast::Group { index, node } => matches(node, s, pos, slots).into_iter().map(|(end, mut out)| {
-            out[*index] = Some((pos, end));
-            (end, out)
-        }).collect(),
+        Ast::Alt(nodes) => nodes
+            .iter()
+            .flat_map(|n| matches(n, s, pos, slots.clone()))
+            .collect(),
+        Ast::Repeat {
+            node,
+            min,
+            max,
+            greedy,
+        } => repeat(node, s, pos, slots, *min, *max, *greedy),
+        Ast::Group { index, node } => matches(node, s, pos, slots)
+            .into_iter()
+            .map(|(end, mut out)| {
+                out[*index] = Some((pos, end));
+                (end, out)
+            })
+            .collect(),
     }
 }
 
 fn match_concat(nodes: &[Ast], s: &str, pos: usize, slots: Slots) -> Vec<(usize, Slots)> {
     if let Some((first, rest)) = nodes.split_first() {
-        matches(first, s, pos, slots).into_iter().flat_map(|(p, sl)| match_concat(rest, s, p, sl)).collect()
+        matches(first, s, pos, slots)
+            .into_iter()
+            .flat_map(|(p, sl)| match_concat(rest, s, p, sl))
+            .collect()
     } else {
         vec![(pos, slots)]
     }
 }
 
-fn repeat(node: &Ast, s: &str, pos: usize, slots: Slots, min: usize, max: Option<usize>, greedy: bool) -> Vec<(usize, Slots)> {
+fn repeat(
+    node: &Ast,
+    s: &str,
+    pos: usize,
+    slots: Slots,
+    min: usize,
+    max: Option<usize>,
+    greedy: bool,
+) -> Vec<(usize, Slots)> {
     let mut out = Vec::new();
     repeat_inner(node, s, pos, slots, min, max, 0, &mut out);
-    if greedy { out.reverse(); }
+    if greedy {
+        out.reverse();
+    }
     out
 }
 
-fn repeat_inner(node: &Ast, s: &str, pos: usize, slots: Slots, min: usize, max: Option<usize>, count: usize, out: &mut Vec<(usize, Slots)>) {
+fn repeat_inner(
+    node: &Ast,
+    s: &str,
+    pos: usize,
+    slots: Slots,
+    min: usize,
+    max: Option<usize>,
+    count: usize,
+    out: &mut Vec<(usize, Slots)>,
+) {
     if count >= min {
         out.push((pos, slots.clone()));
     }
