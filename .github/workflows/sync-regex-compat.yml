@@ -1,0 +1,37 @@
+name: Sync regex-compat branch
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-regex-compat
+  cancel-in-progress: false
+
+jobs:
+  merge-main:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out regex-compat branch
+        uses: actions/checkout@v6
+        with:
+          ref: regex-compat
+          fetch-depth: 0
+
+      - name: Merge main into regex-compat
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin main:refs/remotes/origin/main
+          git merge --no-edit origin/main
+          git push origin HEAD:regex-compat
