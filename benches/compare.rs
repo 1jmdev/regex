@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
-use regex::Regex;
+use fast_reg::Regex;
 use rust_regex::Regex as RustRegex;
 use std::hint::black_box;
 

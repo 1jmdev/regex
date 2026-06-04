@@ -1,4 +1,4 @@
-use regex::Regex;
+use fast_reg::Regex;
 
 fn main() {
     let re = Regex::new(r"h.llo").unwrap();
