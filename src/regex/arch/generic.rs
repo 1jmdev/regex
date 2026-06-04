@@ -10,7 +10,11 @@ pub enum ByteClass {
 
 #[inline(always)]
 pub fn find_a_plus_b(s: &str, start_at: usize) -> Option<Slots> {
-    let bytes = s.as_bytes();
+    find_a_plus_b_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn find_a_plus_b_bytes(bytes: &[u8], start_at: usize) -> Option<Slots> {
     let mut i = start_at;
     while i < bytes.len() {
         let rel = memchr(b'a', &bytes[i..])?;
@@ -29,7 +33,11 @@ pub fn find_a_plus_b(s: &str, start_at: usize) -> Option<Slots> {
 
 #[inline(always)]
 pub fn has_a_plus_b(s: &str, start_at: usize) -> bool {
-    let bytes = s.as_bytes();
+    has_a_plus_b_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn has_a_plus_b_bytes(bytes: &[u8], start_at: usize) -> bool {
     let mut i = start_at;
     while let Some(rel) = memchr(b'b', &bytes[i..]) {
         let b = i + rel;
@@ -57,7 +65,11 @@ pub fn count_a_plus_b_bytes(bytes: &[u8], start_at: usize) -> usize {
 
 #[inline(always)]
 pub fn find_word_eq_digits(s: &str, start_at: usize) -> Option<Slots> {
-    let bytes = s.as_bytes();
+    find_word_eq_digits_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn find_word_eq_digits_bytes(bytes: &[u8], start_at: usize) -> Option<Slots> {
     let mut i = start_at;
     while i < bytes.len() {
         while i < bytes.len() && !is_word_byte(bytes[i]) {
@@ -90,7 +102,11 @@ pub fn find_word_eq_digits(s: &str, start_at: usize) -> Option<Slots> {
 
 #[inline(always)]
 pub fn has_word_eq_digits(s: &str, start_at: usize) -> bool {
-    let bytes = s.as_bytes();
+    has_word_eq_digits_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn has_word_eq_digits_bytes(bytes: &[u8], start_at: usize) -> bool {
     let mut i = start_at;
     while let Some(rel) = memchr(b'=', &bytes[i..]) {
         let eq = i + rel;
@@ -137,32 +153,61 @@ pub fn class_matches_byte(b: u8, class: ByteClass) -> bool {
 
 #[inline(always)]
 pub fn find_digits(s: &str, start_at: usize) -> Option<Slots> {
-    find_run(s.as_bytes(), start_at, |b| b.is_ascii_digit())
+    find_digits_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn find_digits_bytes(bytes: &[u8], start_at: usize) -> Option<Slots> {
+    find_run(bytes, start_at, |b| b.is_ascii_digit())
 }
 
 #[inline(always)]
 pub fn find_words(s: &str, start_at: usize) -> Option<Slots> {
-    find_run(s.as_bytes(), start_at, is_word_byte)
+    find_words_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn find_words_bytes(bytes: &[u8], start_at: usize) -> Option<Slots> {
+    find_run(bytes, start_at, is_word_byte)
 }
 
 #[inline(always)]
 pub fn find_alpha_underscore(s: &str, start_at: usize) -> Option<Slots> {
-    find_run(s.as_bytes(), start_at, is_alpha_underscore_byte)
+    find_alpha_underscore_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn find_alpha_underscore_bytes(bytes: &[u8], start_at: usize) -> Option<Slots> {
+    find_run(bytes, start_at, is_alpha_underscore_byte)
 }
 
 #[inline(always)]
 pub fn find_four_digits(s: &str, start_at: usize) -> Option<Slots> {
-    find_fixed_run(s.as_bytes(), start_at, 4, |b| b.is_ascii_digit())
+    find_four_digits_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn find_four_digits_bytes(bytes: &[u8], start_at: usize) -> Option<Slots> {
+    find_fixed_run(bytes, start_at, 4, |b| b.is_ascii_digit())
 }
 
 #[inline(always)]
 pub fn find_words_min2(s: &str, start_at: usize) -> Option<Slots> {
-    find_min_run(s.as_bytes(), start_at, 2, is_word_byte)
+    find_words_min2_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn find_words_min2_bytes(bytes: &[u8], start_at: usize) -> Option<Slots> {
+    find_min_run(bytes, start_at, 2, is_word_byte)
 }
 
 #[inline(always)]
 pub fn find_ascii_case_error(s: &str, start_at: usize) -> Option<Slots> {
-    let bytes = s.as_bytes();
+    find_ascii_case_error_bytes(s.as_bytes(), start_at)
+}
+
+#[inline(always)]
+pub fn find_ascii_case_error_bytes(bytes: &[u8], start_at: usize) -> Option<Slots> {
     let mut i = start_at;
     while i + 5 <= bytes.len() {
         let rel1 = memchr(b'e', &bytes[i..]);

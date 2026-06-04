@@ -31,10 +31,7 @@ pub enum Ast {
         greedy: bool,
     },
     /// A numbered capturing group wrapping `node`.
-    Group {
-        index: usize,
-        node: Box<Ast>,
-    },
+    Group { index: usize, node: Box<Ast> },
 }
 
 /// A character class such as `[a-z0-9]` or `\d`.

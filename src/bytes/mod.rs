@@ -1,6 +1,4 @@
 mod api;
-mod arch;
-pub(crate) mod fast;
-pub(crate) mod slots;
+mod matcher;
 
 pub use api::{CaptureMatches, Captures, FindMatches, Match, Regex, Replacer, Split};

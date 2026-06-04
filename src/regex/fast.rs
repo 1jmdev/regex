@@ -71,6 +71,23 @@ pub fn find(fast: Fast, haystack: &str, start_at: usize) -> Option<Slots> {
     }
 }
 
+/// Runs the byte fast-path finder for `fast`, returning populated slots or `None` if no match.
+#[inline(always)]
+pub fn find_bytes(fast: Fast, haystack: &[u8], start_at: usize) -> Option<Slots> {
+    match fast {
+        Fast::None => None,
+        Fast::APlusB => generic::find_a_plus_b_bytes(haystack, start_at),
+        Fast::WordEqDigits => generic::find_word_eq_digits_bytes(haystack, start_at),
+        Fast::Digits => generic::find_digits_bytes(haystack, start_at),
+        Fast::Words => generic::find_words_bytes(haystack, start_at),
+        Fast::AlphaUnderscore => generic::find_alpha_underscore_bytes(haystack, start_at),
+        Fast::FourDigits => generic::find_four_digits_bytes(haystack, start_at),
+        Fast::WordsMin2 => generic::find_words_min2_bytes(haystack, start_at),
+        Fast::AsciiCaseError => generic::find_ascii_case_error_bytes(haystack, start_at),
+        Fast::CountAPlusB => None,
+    }
+}
+
 /// Returns `Some(bool)` from the fast path, or `None` to fall back to the interpreter.
 #[inline(always)]
 pub fn is_match(fast: Fast, haystack: &str, start_at: usize) -> Option<bool> {
@@ -84,6 +101,27 @@ pub fn is_match(fast: Fast, haystack: &str, start_at: usize) -> Option<bool> {
         Fast::FourDigits => Some(generic::find_four_digits(haystack, start_at).is_some()),
         Fast::WordsMin2 => Some(generic::find_words_min2(haystack, start_at).is_some()),
         Fast::AsciiCaseError => Some(generic::find_ascii_case_error(haystack, start_at).is_some()),
+        Fast::CountAPlusB => None,
+    }
+}
+
+/// Returns `Some(bool)` from the byte fast path, or `None` to fall back to the interpreter.
+#[inline(always)]
+pub fn is_match_bytes(fast: Fast, haystack: &[u8], start_at: usize) -> Option<bool> {
+    match fast {
+        Fast::None => None,
+        Fast::APlusB => Some(generic::has_a_plus_b_bytes(haystack, start_at)),
+        Fast::WordEqDigits => Some(generic::has_word_eq_digits_bytes(haystack, start_at)),
+        Fast::Digits => Some(generic::find_digits_bytes(haystack, start_at).is_some()),
+        Fast::Words => Some(generic::find_words_bytes(haystack, start_at).is_some()),
+        Fast::AlphaUnderscore => {
+            Some(generic::find_alpha_underscore_bytes(haystack, start_at).is_some())
+        }
+        Fast::FourDigits => Some(generic::find_four_digits_bytes(haystack, start_at).is_some()),
+        Fast::WordsMin2 => Some(generic::find_words_min2_bytes(haystack, start_at).is_some()),
+        Fast::AsciiCaseError => {
+            Some(generic::find_ascii_case_error_bytes(haystack, start_at).is_some())
+        }
         Fast::CountAPlusB => None,
     }
 }
@@ -102,6 +140,50 @@ pub fn count(fast: Fast, haystack: &str, start_at: usize) -> Option<usize> {
         Fast::WordsMin2 => Some(count_words_min2(haystack, start_at)),
         Fast::AsciiCaseError => Some(count_ascii_case_error(haystack, start_at)),
         Fast::CountAPlusB => Some(count_a_plus_b(haystack, start_at)),
+    }
+}
+
+/// Returns the total byte match count from the fast path, or `None` to fall back to the iterator.
+#[inline(always)]
+pub fn count_bytes(fast: Fast, haystack: &[u8], start_at: usize) -> Option<usize> {
+    match fast {
+        Fast::None => None,
+        Fast::APlusB => Some(
+            arch_count_a_plus_b(haystack, start_at)
+                .unwrap_or_else(|| generic::count_a_plus_b_bytes(haystack, start_at)),
+        ),
+        Fast::WordEqDigits => Some(
+            arch_count_word_eq_digits(haystack, start_at)
+                .unwrap_or_else(|| generic::count_word_eq_digits_bytes(haystack, start_at)),
+        ),
+        Fast::Digits => Some(
+            arch_count_digits(haystack, start_at)
+                .unwrap_or_else(|| generic::count_digits_bytes(haystack, start_at)),
+        ),
+        Fast::Words => Some(
+            arch_count_words(haystack, start_at)
+                .unwrap_or_else(|| generic::count_words_bytes(haystack, start_at)),
+        ),
+        Fast::AlphaUnderscore => Some(
+            arch_count_alpha_underscore(haystack, start_at)
+                .unwrap_or_else(|| generic::count_alpha_underscore_bytes(haystack, start_at)),
+        ),
+        Fast::FourDigits => Some(
+            arch_count_four_digits(haystack, start_at)
+                .unwrap_or_else(|| generic::count_four_digits_bytes(haystack, start_at)),
+        ),
+        Fast::WordsMin2 => Some(
+            arch_count_words_min2(haystack, start_at)
+                .unwrap_or_else(|| generic::count_words_min2_bytes(haystack, start_at)),
+        ),
+        Fast::AsciiCaseError => Some(
+            arch_count_ascii_case_error(haystack, start_at)
+                .unwrap_or_else(|| generic::count_ascii_case_error_bytes(haystack, start_at)),
+        ),
+        Fast::CountAPlusB => Some(
+            arch_count_a_plus_b(haystack, start_at)
+                .unwrap_or_else(|| generic::count_a_plus_b_bytes(haystack, start_at)),
+        ),
     }
 }
 
