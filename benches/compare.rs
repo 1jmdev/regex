@@ -36,13 +36,7 @@ fn bench_small(c: &mut Criterion) {
         b.iter(|| black_box(ours.captures(black_box(haystack)).map(|c| c[2].len())))
     });
     group.bench_function("rust-regex captures", |b| {
-        b.iter(|| {
-            black_box(
-                official
-                    .captures(black_box(haystack))
-                    .map(|c| c[2].len()),
-            )
-        })
+        b.iter(|| black_box(official.captures(black_box(haystack)).map(|c| c[2].len())))
     });
 
     let ours = Regex::new(r"a+b").unwrap();

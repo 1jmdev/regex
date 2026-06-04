@@ -2,7 +2,13 @@ use crate::ast::Ast;
 
 pub type Slots = Vec<Option<(usize, usize)>>;
 
-pub fn find(ast: &Ast, haystack: &str, cap_count: usize, start_at: usize, prefix: Option<char>) -> Option<Slots> {
+pub fn find(
+    ast: &Ast,
+    haystack: &str,
+    cap_count: usize,
+    start_at: usize,
+    prefix: Option<char>,
+) -> Option<Slots> {
     let mut start = start_at;
     while start <= haystack.len() {
         if let Some(c) = prefix {
@@ -23,7 +29,9 @@ fn next_literal_start(s: &str, start: usize, prefix: char) -> Option<usize> {
     if prefix.is_ascii() {
         s.get(start..)?.find(prefix).map(|i| start + i)
     } else {
-        s.get(start..)?.char_indices().find_map(|(i, c)| (c == prefix).then_some(start + i))
+        s.get(start..)?
+            .char_indices()
+            .find_map(|(i, c)| (c == prefix).then_some(start + i))
     }
 }
 

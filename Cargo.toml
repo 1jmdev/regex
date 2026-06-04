@@ -6,8 +6,11 @@ edition = "2024"
 [dependencies]
 memchr = "2"
 
+[features]
+wasm-simd128 = []
+
 [dev-dependencies]
-criterion = "0.8.2"
+criterion = { version = "0.8.2", default-features = false }
 rust-regex = { package = "regex", version = "1" }
 
 [[bench]]
