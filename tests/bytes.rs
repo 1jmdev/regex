@@ -1,4 +1,4 @@
-use fast_reg::bytes::{Regex, RegexSet};
+use regex::bytes::{Regex, RegexSet};
 
 fn assert_same(pattern: &str, haystack: &[u8]) {
     let fast = Regex::new(pattern).unwrap();
@@ -66,7 +66,7 @@ fn bytes_split_and_replace() {
     assert_eq!(re.replace(b"x=12 y=3", b"$2:$1"), b"12:x y=3");
     assert_eq!(re.replace_all(b"x=12 y=3", b"$2:$1"), b"12:x 3:y");
     assert_eq!(
-        re.replace_all(b"x=12", |caps: &fast_reg::bytes::Captures<'_>| {
+        re.replace_all(b"x=12", |caps: &regex::bytes::Captures<'_>| {
             caps[2].to_vec()
         }),
         b"12"

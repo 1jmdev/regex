@@ -128,7 +128,7 @@ dependencies = [
  "num-traits",
  "oorandom",
  "page_size",
- "regex",
+ "regex 1.12.3",
  "serde",
  "serde_json",
  "tinytemplate",
@@ -156,15 +156,6 @@ name = "either"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
-
-[[package]]
-name = "fast-reg"
-version = "0.1.0"
-dependencies = [
- "criterion",
- "memchr",
- "regex",
-]
 
 [[package]]
 name = "find-msvc-tools"
@@ -251,6 +242,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "regex"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "memchr",
+ "regex 1.12.3",
 ]
 
 [[package]]

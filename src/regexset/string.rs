@@ -34,7 +34,7 @@ use crate::{error::Error, regex::Regex};
 /// ## Example
 ///
 /// ```
-/// use fast_reg::RegexSet;
+/// use regex::RegexSet;
 ///
 /// let set = RegexSet::new([r"\d+", r"\w+", r"^foo"]).unwrap();
 /// let matches: Vec<usize> = set.matches("foo 123").iter().collect();
@@ -46,7 +46,7 @@ use crate::{error::Error, regex::Regex};
 /// Use [`is_match`](RegexSet::is_match) when you only need a boolean answer.
 ///
 /// ```
-/// use fast_reg::RegexSet;
+/// use regex::RegexSet;
 ///
 /// let set = RegexSet::new([r"error", r"warning", r"critical"]).unwrap();
 /// assert!(set.is_match("critical failure"));
@@ -59,7 +59,7 @@ use crate::{error::Error, regex::Regex};
 /// order supplied to [`RegexSet::new`].
 ///
 /// ```
-/// use fast_reg::RegexSet;
+/// use regex::RegexSet;
 ///
 /// let set = RegexSet::new([r"foo", r"bar", r"baz"]).unwrap();
 /// let matches = set.matches("bar and baz");
@@ -83,7 +83,7 @@ pub struct RegexSet {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::RegexSet;
+/// use regex::RegexSet;
 ///
 /// let set = RegexSet::new([r"\d+", r"[a-z]+", r"^foo"]).unwrap();
 /// let matches = set.matches("foo 42");
@@ -103,7 +103,7 @@ pub struct SetMatches {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::RegexSet;
+/// use regex::RegexSet;
 ///
 /// let set = RegexSet::new([r"foo", r"bar", r"baz"]).unwrap();
 /// let matches = set.matches("foo baz");
@@ -126,7 +126,7 @@ impl RegexSet {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::RegexSet;
+    /// use regex::RegexSet;
     ///
     /// let set = RegexSet::new([r"\d+", r"\w+"]).unwrap();
     /// assert_eq!(set.len(), 2);

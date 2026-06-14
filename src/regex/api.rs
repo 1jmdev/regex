@@ -40,7 +40,7 @@ use crate::{
 /// ## Example
 ///
 /// ```
-/// use fast_reg::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"\d{4}-\d{2}-\d{2}").unwrap();
 /// assert!(re.is_match("today is 2024-01-15"));
@@ -53,7 +53,7 @@ use crate::{
 /// in the pattern left-to-right.
 ///
 /// ```
-/// use fast_reg::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
 /// let caps = re.captures("count=42 limit=100").unwrap();
@@ -64,7 +64,7 @@ use crate::{
 /// ## Example: replace with a closure
 ///
 /// ```
-/// use fast_reg::{Regex, Captures};
+/// use regex::{Regex, Captures};
 ///
 /// let re = Regex::new(r"(\w+)").unwrap();
 /// let result = re.replace("hello world", |caps: &Captures<'_>| {
@@ -91,7 +91,7 @@ pub struct Regex {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"\d+").unwrap();
 /// let m = re.find("foo 42 bar").unwrap();
@@ -117,7 +117,7 @@ pub struct Match<'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"(\d{4})-(\d{2})-(\d{2})").unwrap();
 /// let caps = re.captures("date: 2024-01-15").unwrap();
@@ -140,7 +140,7 @@ pub struct Captures<'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"\d+").unwrap();
 /// let nums: Vec<&str> = re.find_iter("one 1 two 22 three 333").map(|m| m.as_str()).collect();
@@ -162,7 +162,7 @@ pub struct FindMatches<'r, 'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
 /// let pairs: Vec<(&str, &str)> = re
@@ -191,7 +191,7 @@ pub struct CaptureMatches<'r, 'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"\s+").unwrap();
 /// let words: Vec<&str> = re.split("one   two\tthree").collect();
@@ -218,7 +218,7 @@ pub struct Split<'r, 'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::Regex;
+/// use regex::Regex;
 ///
 /// let re = Regex::new(r"(\w+)\s(\w+)").unwrap();
 /// let result = re.replace("hello world", "$2 $1");
@@ -237,7 +237,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// assert!(re.is_match("abc 123"));
@@ -260,7 +260,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// assert_eq!(re.as_str(), r"\d+");
@@ -279,7 +279,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\b\w{5}\b").unwrap();
     /// assert!(re.is_match("hello world"));
@@ -299,7 +299,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// let m = re.find("price: $42").unwrap();
@@ -319,7 +319,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(\w+)@(\w+)\.(\w+)").unwrap();
     /// let caps = re.captures("user@example.com").unwrap();
@@ -344,7 +344,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// let sum: u32 = re
@@ -371,7 +371,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
     /// let pairs: Vec<(&str, &str)> = re
@@ -395,7 +395,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r",\s*").unwrap();
     /// let fields: Vec<&str> = re.split("one, two,three").collect();
@@ -420,7 +420,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// assert_eq!(re.replace("foo 1 bar 2", "X"), "foo X bar 2");
@@ -448,7 +448,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// assert_eq!(re.replace_all("foo 1 bar 2 baz 3", "X"), "foo X bar X baz X");
@@ -501,7 +501,7 @@ impl<'h> Captures<'h> {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::Regex;
+    /// use regex::Regex;
     ///
     /// let re = Regex::new(r"(\d+)").unwrap();
     /// let caps = re.captures("price: 99").unwrap();

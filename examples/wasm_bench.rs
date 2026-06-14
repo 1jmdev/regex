@@ -1,4 +1,4 @@
-use fast_reg::Regex;
+use regex::Regex;
 use rust_regex::Regex as RustRegex;
 use std::hint::black_box;
 use std::time::{Duration, Instant};

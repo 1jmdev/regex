@@ -42,7 +42,7 @@ use super::matcher;
 /// ## Example
 ///
 /// ```
-/// use fast_reg::bytes::Regex;
+/// use regex::bytes::Regex;
 ///
 /// let re = Regex::new(r"\d{4}-\d{2}-\d{2}").unwrap();
 /// assert!(re.is_match(b"today is 2024-01-15"));
@@ -55,7 +55,7 @@ use super::matcher;
 /// in the pattern left-to-right.
 ///
 /// ```
-/// use fast_reg::bytes::Regex;
+/// use regex::bytes::Regex;
 ///
 /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
 /// let caps = re.captures(b"count=42 limit=100").unwrap();
@@ -66,7 +66,7 @@ use super::matcher;
 /// ## Example: replace with a closure
 ///
 /// ```
-/// use fast_reg::bytes::{Regex, Captures};
+/// use regex::bytes::{Regex, Captures};
 ///
 /// let re = Regex::new(r"(\w+)").unwrap();
 /// let result = re.replace(b"hello world", |caps: &Captures<'_>| {
@@ -93,7 +93,7 @@ pub struct Regex {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::bytes::Regex;
+/// use regex::bytes::Regex;
 ///
 /// let re = Regex::new(r"\d+").unwrap();
 /// let m = re.find(b"foo 42 bar").unwrap();
@@ -119,7 +119,7 @@ pub struct Match<'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::bytes::Regex;
+/// use regex::bytes::Regex;
 ///
 /// let re = Regex::new(r"(\d{4})-(\d{2})-(\d{2})").unwrap();
 /// let caps = re.captures(b"date: 2024-01-15").unwrap();
@@ -142,7 +142,7 @@ pub struct Captures<'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::bytes::Regex;
+/// use regex::bytes::Regex;
 ///
 /// let re = Regex::new(r"\d+").unwrap();
 /// let nums: Vec<&[u8]> = re.find_iter(b"one 1 two 22 three 333").map(|m| m.as_bytes()).collect();
@@ -164,7 +164,7 @@ pub struct FindMatches<'r, 'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::bytes::Regex;
+/// use regex::bytes::Regex;
 ///
 /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
 /// let pairs: Vec<(&[u8], &[u8])> = re
@@ -193,7 +193,7 @@ pub struct CaptureMatches<'r, 'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::bytes::Regex;
+/// use regex::bytes::Regex;
 ///
 /// let re = Regex::new(r"\s+").unwrap();
 /// let words: Vec<&[u8]> = re.split(b"one   two\tthree").collect();
@@ -220,7 +220,7 @@ pub struct Split<'r, 'h> {
 /// ## Example
 ///
 /// ```
-/// use fast_reg::bytes::Regex;
+/// use regex::bytes::Regex;
 ///
 /// let re = Regex::new(r"(\w+)\s(\w+)").unwrap();
 /// let result = re.replace(b"hello world", b"$2 $1");
@@ -239,7 +239,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// assert!(re.is_match(b"abc 123"));
@@ -262,7 +262,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// assert_eq!(re.as_str(), r"\d+");
@@ -281,7 +281,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"\b\w{5}\b").unwrap();
     /// assert!(re.is_match(b"hello world"));
@@ -301,7 +301,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// let m = re.find(b"price: $42").unwrap();
@@ -321,7 +321,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"(\w+)@(\w+)\.(\w+)").unwrap();
     /// let caps = re.captures(b"user@example.com").unwrap();
@@ -346,7 +346,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// let sum: u32 = re
@@ -373,7 +373,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
     /// let pairs: Vec<(&[u8], &[u8])> = re
@@ -397,7 +397,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r",\s*").unwrap();
     /// let fields: Vec<&[u8]> = re.split(b"one, two,three").collect();
@@ -422,7 +422,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// assert_eq!(re.replace(b"foo 1 bar 2", b"X"), b"foo X bar 2");
@@ -450,7 +450,7 @@ impl Regex {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
     /// assert_eq!(re.replace_all(b"foo 1 bar 2 baz 3", b"X"), b"foo X bar X baz X");
@@ -503,7 +503,7 @@ impl<'h> Captures<'h> {
     /// ## Example
     ///
     /// ```
-    /// use fast_reg::bytes::Regex;
+    /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"(\d+)").unwrap();
     /// let caps = re.captures(b"price: 99").unwrap();

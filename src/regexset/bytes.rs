@@ -14,7 +14,7 @@ use crate::{bytes::Regex, error::Error};
 /// ## Example
 ///
 /// ```
-/// use fast_reg::bytes::RegexSet;
+/// use regex::bytes::RegexSet;
 ///
 /// let set = RegexSet::new([r"\d+", r"\w+", r"^foo"]).unwrap();
 /// let matches: Vec<usize> = set.matches(b"foo 123").iter().collect();

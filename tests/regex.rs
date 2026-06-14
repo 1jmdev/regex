@@ -1,4 +1,4 @@
-use fast_reg::{Regex, RegexSet};
+use regex::{Regex, RegexSet};
 
 #[test]
 fn literal_and_dot() {

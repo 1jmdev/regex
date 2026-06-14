@@ -9,7 +9,7 @@ use core::fmt;
 /// ## Example
 ///
 /// ```
-/// use fast_reg::Regex;
+/// use regex::Regex;
 ///
 /// let err = Regex::new(r"(unclosed").unwrap_err();
 /// assert!(!err.to_string().is_empty());
