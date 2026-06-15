@@ -28,7 +28,7 @@ dependency tree without changing your existing `regex` dependency:
 
 ```toml
 [dependencies]
-regex = "1"
+regex = "1.12.4"
 
 [patch.crates-io]
 regex = { git = "https://github.com/1jmdev/regex.git" }
