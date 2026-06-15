@@ -413,6 +413,7 @@ impl Parser {
                     ClassItem::Char(c.to_ascii_lowercase()),
                     ClassItem::Char(c.to_ascii_uppercase()),
                 ],
+                intersections: Vec::new(),
             })
         } else {
             Ast::Literal(c)
@@ -426,26 +427,32 @@ impl Parser {
             'd' => Ast::Class(Class {
                 negated: false,
                 items: vec![ClassItem::Digit],
+                intersections: Vec::new(),
             }),
             'D' => Ast::Class(Class {
                 negated: true,
                 items: vec![ClassItem::Digit],
+                intersections: Vec::new(),
             }),
             'w' => Ast::Class(Class {
                 negated: false,
                 items: vec![ClassItem::Word],
+                intersections: Vec::new(),
             }),
             'W' => Ast::Class(Class {
                 negated: true,
                 items: vec![ClassItem::Word],
+                intersections: Vec::new(),
             }),
             's' => Ast::Class(Class {
                 negated: false,
                 items: vec![ClassItem::Space],
+                intersections: Vec::new(),
             }),
             'S' => Ast::Class(Class {
                 negated: true,
                 items: vec![ClassItem::Space],
+                intersections: Vec::new(),
             }),
             'b' if !in_class => Ast::WordBoundary(true),
             'B' if !in_class => Ast::WordBoundary(false),
@@ -474,6 +481,7 @@ impl Parser {
                 Ast::Class(Class {
                     negated,
                     items: vec![ClassItem::UnicodeProperty(self.property_name()?)],
+                    intersections: Vec::new(),
                 })
             }
             '0'..='7' => {
@@ -549,13 +557,40 @@ impl Parser {
 
     /// Parses a `[...]` character class body.
     fn parse_class(&mut self) -> Result<Ast, Error> {
+        Ok(Ast::Class(self.parse_class_expr()?))
+    }
+
+    fn parse_class_expr(&mut self) -> Result<Class, Error> {
+        let mut class = self.parse_class_union()?;
+        while self.peek() == Some('&') && self.chars.get(self.pos + 1) == Some(&'&') {
+            self.bump();
+            self.bump();
+            class.intersections.push(self.parse_class_union()?);
+        }
+        if !self.eat(']') {
+            return Err(Error::new("unclosed character class"));
+        }
+        Ok(class)
+    }
+
+    fn parse_class_union(&mut self) -> Result<Class, Error> {
         let negated = self.eat('^');
         let mut items = Vec::new();
         let mut first = true;
         while let Some(c) = self.peek() {
             if c == ']' && !first {
-                self.bump();
-                return Ok(Ast::Class(Class { negated, items }));
+                return Ok(Class {
+                    negated,
+                    items,
+                    intersections: Vec::new(),
+                });
+            }
+            if !first && c == '&' && self.chars.get(self.pos + 1) == Some(&'&') {
+                return Ok(Class {
+                    negated,
+                    items,
+                    intersections: Vec::new(),
+                });
             }
             first = false;
             let start = self.class_item()?;
@@ -614,10 +649,14 @@ impl Parser {
             .ok_or_else(|| Error::new("unclosed character class"))?
         {
             '\\' => match self.parse_escape(true)? {
-                Ast::Class(c) if c.items.len() == 1 && !c.negated => Ok(c.items[0].clone()),
+                Ast::Class(c) if c.items.len() == 1 && !c.negated && c.intersections.is_empty() => {
+                    Ok(c.items[0].clone())
+                }
+                Ast::Class(c) => Ok(ClassItem::Class(Box::new(c))),
                 Ast::Literal(c) => Ok(ClassItem::Char(c)),
                 _ => Err(Error::new("unsupported class escape")),
             },
+            '[' => Ok(ClassItem::Class(Box::new(self.parse_class_expr()?))),
             c => Ok(ClassItem::Char(c)),
         }
     }

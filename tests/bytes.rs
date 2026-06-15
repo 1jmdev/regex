@@ -107,6 +107,23 @@ fn bytes_extended_syntax() {
 }
 
 #[test]
+fn bytes_nested_class_intersections_and_properties() {
+    let re = Regex::new(r"[[\P{N}&&\P{L}]&&[^#]]+$").unwrap();
+    assert!(re.is_match(b"-(). "));
+    assert!(!re.is_match(b"abc"));
+    assert!(!re.is_match(b"123"));
+    assert!(!re.is_match(b"#"));
+
+    assert!(Regex::new(r"^\p{Nd}+$").unwrap().is_match(b"123"));
+    assert!(Regex::new(r"^[\p{L}]+$").unwrap().is_match("éA".as_bytes()));
+    assert!(
+        Regex::new(r"^\x{2053}\x{223C}\x{FF5E}$")
+            .unwrap()
+            .is_match("⁓∼～".as_bytes())
+    );
+}
+
+#[test]
 fn bytes_builder_extra_options_are_enforced() {
     let re = RegexBuilder::new(r"(?m)^bar$").crlf(true).build().unwrap();
     assert!(re.is_match(b"foo\r\nbar\r\nbaz"));

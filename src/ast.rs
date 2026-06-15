@@ -44,6 +44,7 @@ pub struct Class {
     /// If `true` the class matches characters *not* in `items`.
     pub negated: bool,
     pub items: Vec<ClassItem>,
+    pub intersections: Vec<Class>,
 }
 
 /// A single element inside a [`Class`].
@@ -61,6 +62,8 @@ pub enum ClassItem {
     Space,
     /// A Unicode general category or property shorthand (`\p{...}`).
     UnicodeProperty(String),
+    /// A nested character class, including its own negation and intersections.
+    Class(Box<Class>),
 }
 
 impl Class {
@@ -73,8 +76,9 @@ impl Class {
             ClassItem::Word => c.is_ascii_alphanumeric() || c == '_',
             ClassItem::Space => c.is_whitespace(),
             ClassItem::UnicodeProperty(ref name) => matches_unicode_property(name, c),
+            ClassItem::Class(ref class) => class.matches(c),
         });
-        hit != self.negated
+        (hit != self.negated) && self.intersections.iter().all(|class| class.matches(c))
     }
 }
 

@@ -66,6 +66,23 @@ fn character_classes() {
 }
 
 #[test]
+fn nested_class_intersections_and_properties() {
+    let re = Regex::new(r"[[\P{N}&&\P{L}]&&[^#]]+$").unwrap();
+    assert!(re.is_match("-(). "));
+    assert!(!re.is_match("abc"));
+    assert!(!re.is_match("123"));
+    assert!(!re.is_match("#"));
+
+    assert!(Regex::new(r"^\p{Nd}+$").unwrap().is_match("123"));
+    assert!(Regex::new(r"^[\p{L}]+$").unwrap().is_match("éA"));
+    assert!(
+        Regex::new(r"^\x{2053}\x{223C}\x{FF5E}$")
+            .unwrap()
+            .is_match("⁓∼～")
+    );
+}
+
+#[test]
 fn case_insensitive_flag() {
     assert!(Regex::new(r"(?i)error").unwrap().is_match("ERROR"));
     assert!(Regex::new(r"(?i)[a-z]+").unwrap().is_match("ABC"));
