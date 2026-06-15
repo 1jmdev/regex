@@ -1,4 +1,4 @@
-use regex::{Regex, RegexSet};
+use regex::{Regex, RegexBuilder, RegexSet, RegexSetBuilder};
 
 #[test]
 fn literal_and_dot() {
@@ -70,6 +70,80 @@ fn case_insensitive_flag() {
     assert!(Regex::new(r"(?i)error").unwrap().is_match("ERROR"));
     assert!(Regex::new(r"(?i)[a-z]+").unwrap().is_match("ABC"));
     assert!(!Regex::new(r"(?i)error").unwrap().is_match("warning"));
+}
+
+#[test]
+fn extended_group_and_flag_syntax() {
+    let re = Regex::new(r"(?:cat|dog)s?").unwrap();
+    assert_eq!(re.captures_len(), 1);
+    assert!(re.is_match("dogs"));
+
+    assert!(Regex::new(r"a(?i:b)c").unwrap().is_match("aBc"));
+    assert!(!Regex::new(r"a(?i:b)c").unwrap().is_match("Abc"));
+    assert!(Regex::new(r"(?m)^bar$").unwrap().is_match("foo\nbar\nbaz"));
+    assert!(Regex::new(r"(?s)a.c").unwrap().is_match("a\nc"));
+    assert!(Regex::new(r"(?x)a b c").unwrap().is_match("abc"));
+}
+
+#[test]
+fn named_captures_and_replacements() {
+    let re = Regex::new(r"(?P<key>\w+)=(?<value>\d+)").unwrap();
+    let caps = re.captures("count=42").unwrap();
+
+    assert_eq!(re.captures_len(), 3);
+    assert_eq!(
+        re.capture_names().collect::<Vec<_>>(),
+        [None, Some("key"), Some("value")]
+    );
+    assert_eq!(caps.name("key").unwrap().as_str(), "count");
+    assert_eq!(caps.name("value").unwrap().as_str(), "42");
+    assert_eq!(&caps["key"], "count");
+    assert_eq!(re.replace("count=42", "${value}:${key}"), "42:count");
+}
+
+#[test]
+fn escapes_anchors_and_repetition_compatibility() {
+    assert!(Regex::new(r"\Aabc\z").unwrap().is_match("abc"));
+    assert!(!Regex::new(r"\Aabc\z").unwrap().is_match("xabc"));
+    assert!(Regex::new(r"\x41\u0042\u{43}").unwrap().is_match("ABC"));
+    assert!(Regex::new(r"^\p{Letter}+$").unwrap().is_match("éA"));
+    assert!(Regex::new(r"ab{,3}c").unwrap().is_match("ac"));
+    assert!(Regex::new(r"ab{,3}c").unwrap().is_match("abbbc"));
+}
+
+#[test]
+fn builder_crlf_anchors() {
+    let re = RegexBuilder::new(r"(?m)^bar$").crlf(true).build().unwrap();
+
+    assert!(re.is_match("foo\r\nbar\r\nbaz"));
+    assert!(!re.is_match("foo\r\n\rbar\r\nbaz"));
+}
+
+#[test]
+fn builder_syntax_options_are_enforced() {
+    assert!(RegexBuilder::new(r"\141").build().is_err());
+    assert!(
+        RegexBuilder::new(r"\141")
+            .octal(true)
+            .build()
+            .unwrap()
+            .is_match("a")
+    );
+
+    assert!(RegexBuilder::new(r"\u{61}").unicode(false).build().is_err());
+    assert!(
+        RegexBuilder::new(r"\p{Letter}")
+            .unicode(false)
+            .build()
+            .is_err()
+    );
+}
+
+#[test]
+fn builder_compile_limits_are_enforced() {
+    assert!(RegexBuilder::new("(a)").nest_limit(0).build().is_err());
+    assert!(RegexBuilder::new("abcdef").size_limit(2).build().is_err());
+    assert!(RegexBuilder::new("abcdef").size_limit(20).build().is_ok());
 }
 
 #[test]
@@ -184,4 +258,42 @@ fn regex_set_reports_matching_pattern_indexes() {
     assert_eq!(matches.iter().collect::<Vec<_>>(), vec![0, 1, 2]);
     assert_eq!((&matches).into_iter().collect::<Vec<_>>(), vec![0, 1, 2]);
     assert_eq!(matches.into_iter().collect::<Vec<_>>(), vec![0, 1, 2]);
+}
+
+#[test]
+fn regex_set_builder_flags_apply_to_patterns() {
+    let set = RegexSetBuilder::new([r"^bar$", r"a.c", r"a b"])
+        .multi_line(true)
+        .dot_matches_new_line(true)
+        .ignore_whitespace(true)
+        .build()
+        .unwrap();
+
+    assert!(set.matches("foo\nbar\nbaz").matched(0));
+    assert!(set.matches("a\nc").matched(1));
+    assert!(set.matches("ab").matched(2));
+}
+
+#[test]
+fn regex_set_builder_extra_options_apply_to_patterns() {
+    let set = RegexSetBuilder::new([r"(?m)^bar$", r"\141"])
+        .crlf(true)
+        .octal(true)
+        .build()
+        .unwrap();
+
+    assert!(set.matches("foo\r\nbar\r\na").matched(0));
+    assert!(set.matches("foo\r\nbar\r\na").matched(1));
+    assert!(
+        RegexSetBuilder::new([r"(a)"])
+            .nest_limit(0)
+            .build()
+            .is_err()
+    );
+    assert!(
+        RegexSetBuilder::new([r"abcdef"])
+            .size_limit(2)
+            .build()
+            .is_err()
+    );
 }

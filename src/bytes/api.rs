@@ -9,7 +9,7 @@ use crate::{
 };
 
 use super::matcher;
-use std::{borrow::Cow, fmt};
+use std::{borrow::Cow, fmt, sync::Arc};
 
 /// A compiled regular expression for searching byte haystacks.
 ///
@@ -82,13 +82,13 @@ pub struct Regex {
     captures: usize,
     prefix: Option<u8>,
     fast: Fast,
+    capture_names: Arc<[Option<String>]>,
 }
 
 /// A configurable builder for compiling byte [`Regex`] values.
 ///
-/// `RegexBuilder` lets you construct a byte regex while setting options before
-/// compilation. Options that are not supported by this engine are accepted for
-/// API compatibility and leave matching behavior unchanged.
+/// `RegexBuilder` lets you construct a byte regex while setting syntax and
+/// matching options before compilation.
 ///
 /// ## Example
 ///
@@ -106,6 +106,16 @@ pub struct Regex {
 pub struct RegexBuilder {
     pattern: String,
     case_insensitive: bool,
+    multi_line: bool,
+    dot_matches_new_line: bool,
+    swap_greed: bool,
+    ignore_whitespace: bool,
+    crlf: bool,
+    unicode: bool,
+    octal: bool,
+    size_limit: Option<usize>,
+    dfa_size_limit: Option<usize>,
+    nest_limit: Option<u32>,
 }
 
 /// A single contiguous match within a haystack.
@@ -156,6 +166,7 @@ pub struct Match<'h> {
 pub struct Captures<'h> {
     haystack: &'h [u8],
     slots: Slots,
+    names: Arc<[Option<String>]>,
 }
 
 /// An iterator over all non-overlapping [`Match`]es in a haystack.
@@ -252,21 +263,23 @@ pub struct SplitN<'r, 'h> {
 
 /// An iterator over the capture group names in a [`Regex`].
 ///
-/// Created by [`Regex::capture_names`]. Group `0` is always unnamed. This
-/// engine does not currently support named capture syntax, so every item
-/// yielded is `None`.
+/// Created by [`Regex::capture_names`]. Group `0` is always unnamed. Unnamed
+/// capturing groups yield `None`, while named capturing groups yield their
+/// capture name.
 ///
 /// ## Example
 ///
 /// ```
 /// use regex::bytes::Regex;
 ///
-/// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
+/// let re = Regex::new(r"(?P<key>\w+)=(?<value>\d+)").unwrap();
 /// let names: Vec<Option<&str>> = re.capture_names().collect();
-/// assert_eq!(names, [None, None, None]);
+/// assert_eq!(names, [None, Some("key"), Some("value")]);
 /// ```
-pub struct CaptureNames {
-    remaining: usize,
+pub struct CaptureNames<'r> {
+    names: &'r [Option<String>],
+    pos: usize,
+    total: usize,
 }
 
 /// A type that can produce replacement bytes for a [`Regex`] substitution.
@@ -311,13 +324,25 @@ impl Regex {
     /// assert!(Regex::new(r"[unclosed").is_err());
     /// ```
     pub fn new(pattern: &str) -> Result<Self, Error> {
-        let parsed = parser::parse(pattern)?;
+        Self::new_with_options(pattern, parser::Options::default(), None)
+    }
+
+    pub(crate) fn new_with_options(
+        pattern: &str,
+        options: parser::Options,
+        size_limit: Option<usize>,
+    ) -> Result<Self, Error> {
+        let parsed = parser::parse_with_options(pattern, options)?;
+        if size_limit.is_some_and(|limit| parsed.ast.node_count() > limit) {
+            return Err(Error::new("compiled regex exceeds size limit"));
+        }
         Ok(Self {
             pattern: pattern.to_owned(),
             fast: fast::classify(pattern),
             prefix: matcher::literal_prefix_byte(&parsed.ast),
             ast: parsed.ast,
             captures: parsed.captures,
+            capture_names: Arc::from(parsed.capture_names),
         })
     }
 
@@ -354,21 +379,23 @@ impl Regex {
 
     /// Returns an iterator over the capture group names in this regex.
     ///
-    /// Group `0` is always unnamed. This engine does not currently support
-    /// named capture syntax, so every item yielded is `None`.
+    /// Group `0` is always unnamed. Unnamed capturing groups yield `None`,
+    /// while named capturing groups yield their capture name.
     ///
     /// ## Example
     ///
     /// ```
     /// use regex::bytes::Regex;
     ///
-    /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
+    /// let re = Regex::new(r"(?P<key>\w+)=(?<value>\d+)").unwrap();
     /// let names: Vec<Option<&str>> = re.capture_names().collect();
-    /// assert_eq!(names, [None, None, None]);
+    /// assert_eq!(names, [None, Some("key"), Some("value")]);
     /// ```
-    pub fn capture_names(&self) -> CaptureNames {
+    pub fn capture_names(&self) -> CaptureNames<'_> {
         CaptureNames {
-            remaining: self.captures_len(),
+            names: &self.capture_names,
+            pos: 0,
+            total: self.captures_len(),
         }
     }
 
@@ -475,16 +502,25 @@ impl Regex {
     pub fn captures_at<'h>(&self, haystack: &'h [u8], start: usize) -> Option<Captures<'h>> {
         if let Some(slots) = fast::find_bytes(self.fast, haystack, 0) {
             if slots.get(0).is_some_and(|(s, _)| s >= start) {
-                return Some(Captures { haystack, slots });
+                return Some(Captures {
+                    haystack,
+                    slots,
+                    names: self.capture_names.clone(),
+                });
             }
         }
         if let Some(slots) = fast::find_bytes(self.fast, haystack, start) {
-            return Some(Captures { haystack, slots });
+            return Some(Captures {
+                haystack,
+                slots,
+                names: self.capture_names.clone(),
+            });
         }
         matcher::find(&self.ast, haystack, self.captures, start, self.prefix).map(|slots| {
             Captures {
                 haystack,
                 slots: Slots::Heap(slots),
+                names: self.capture_names.clone(),
             }
         })
     }
@@ -688,6 +724,16 @@ impl RegexBuilder {
         Self {
             pattern: pattern.to_owned(),
             case_insensitive: false,
+            multi_line: false,
+            dot_matches_new_line: false,
+            swap_greed: false,
+            ignore_whitespace: false,
+            crlf: false,
+            unicode: true,
+            octal: false,
+            size_limit: None,
+            dfa_size_limit: None,
+            nest_limit: None,
         }
     }
 
@@ -706,11 +752,47 @@ impl RegexBuilder {
     /// assert!(RegexBuilder::new(r"[unclosed").build().is_err());
     /// ```
     pub fn build(&self) -> Result<Regex, Error> {
-        if self.case_insensitive {
-            Regex::new(&format!("(?i){}", self.pattern))
+        let flags = self.flags();
+        if flags.is_empty() {
+            Regex::new_with_options(&self.pattern, self.options(), self.size_limit)
         } else {
-            Regex::new(&self.pattern)
+            Regex::new_with_options(
+                &format!("(?{}){}", flags, self.pattern),
+                self.options(),
+                self.size_limit,
+            )
         }
+    }
+
+    fn options(&self) -> parser::Options {
+        parser::Options {
+            unicode: self.unicode,
+            octal: self.octal,
+            nest_limit: self.nest_limit,
+        }
+    }
+
+    fn flags(&self) -> String {
+        let mut flags = String::new();
+        if self.case_insensitive {
+            flags.push('i');
+        }
+        if self.multi_line {
+            flags.push('m');
+        }
+        if self.dot_matches_new_line {
+            flags.push('s');
+        }
+        if self.ignore_whitespace {
+            flags.push('x');
+        }
+        if self.swap_greed {
+            flags.push('U');
+        }
+        if self.crlf {
+            flags.push('R');
+        }
+        flags
     }
 
     /// Enable or disable ASCII case-insensitive matching.
@@ -735,81 +817,86 @@ impl RegexBuilder {
 
     /// Enable or disable multi-line mode.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn multi_line(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, `^` and `$` also match after and before `\n`.
+    pub fn multi_line(&mut self, yes: bool) -> &mut Self {
+        self.multi_line = yes;
         self
     }
 
     /// Enable or disable allowing `.` to match `\n`.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn dot_matches_new_line(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, `.` matches newline bytes.
+    pub fn dot_matches_new_line(&mut self, yes: bool) -> &mut Self {
+        self.dot_matches_new_line = yes;
         self
     }
 
     /// Enable or disable CRLF-aware line anchors.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn crlf(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, `^` and `$` treat `\r\n` as one line terminator.
+    pub fn crlf(&mut self, yes: bool) -> &mut Self {
+        self.crlf = yes;
         self
     }
 
     /// Enable or disable swapping greediness for repetition operators.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn swap_greed(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, repetition operators are non-greedy by default and `?`
+    /// makes them greedy.
+    pub fn swap_greed(&mut self, yes: bool) -> &mut Self {
+        self.swap_greed = yes;
         self
     }
 
     /// Enable or disable insignificant whitespace mode.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn ignore_whitespace(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, whitespace in patterns is ignored outside character
+    /// classes.
+    pub fn ignore_whitespace(&mut self, yes: bool) -> &mut Self {
+        self.ignore_whitespace = yes;
         self
     }
 
     /// Enable or disable Unicode mode.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn unicode(&mut self, _yes: bool) -> &mut Self {
+    /// When disabled, Unicode escapes and properties such as `\u{2603}` and
+    /// `\p{Letter}` are rejected at compile time.
+    pub fn unicode(&mut self, yes: bool) -> &mut Self {
+        self.unicode = yes;
         self
     }
 
     /// Enable or disable octal escape syntax.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn octal(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, octal escapes such as `\141` are accepted.
+    pub fn octal(&mut self, yes: bool) -> &mut Self {
+        self.octal = yes;
         self
     }
 
     /// Set the approximate compiled regex size limit.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn size_limit(&mut self, _limit: usize) -> &mut Self {
+    /// Compilation fails if the parsed expression exceeds this approximate AST
+    /// node limit.
+    pub fn size_limit(&mut self, limit: usize) -> &mut Self {
+        self.size_limit = Some(limit);
         self
     }
 
     /// Set the approximate DFA cache size limit.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn dfa_size_limit(&mut self, _limit: usize) -> &mut Self {
+    /// Records the DFA cache size requested by callers. This engine is an AST
+    /// interpreter and does not allocate a DFA cache while matching.
+    pub fn dfa_size_limit(&mut self, limit: usize) -> &mut Self {
+        self.dfa_size_limit = Some(limit);
         self
     }
 
     /// Set the nesting limit used while compiling a regex.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn nest_limit(&mut self, _limit: u32) -> &mut Self {
+    /// Compilation fails when parenthesized group nesting exceeds `limit`.
+    pub fn nest_limit(&mut self, limit: u32) -> &mut Self {
+        self.nest_limit = Some(limit);
         self
     }
 }
@@ -870,8 +957,12 @@ impl<'h> Captures<'h> {
 
     /// Returns the capture group with the given name, or `None` if no such
     /// group exists or the group did not participate in the match.
-    pub fn name(&self, _name: &str) -> Option<Match<'h>> {
-        None
+    pub fn name(&self, name: &str) -> Option<Match<'h>> {
+        let index = self
+            .names
+            .iter()
+            .position(|candidate| candidate.as_deref() == Some(name))?;
+        self.get(index + 1)
     }
 
     /// Returns the total number of capture slots (including group 0).
@@ -885,17 +976,23 @@ impl<'h> Captures<'h> {
     }
 }
 
-impl Iterator for CaptureNames {
-    type Item = Option<&'static str>;
+impl<'r> Iterator for CaptureNames<'r> {
+    type Item = Option<&'r str>;
 
     /// Advances the iterator and returns the next capture name, or `None` when exhausted.
     fn next(&mut self) -> Option<Self::Item> {
-        if self.remaining == 0 {
+        if self.pos >= self.total {
+            return None;
+        }
+        let item = if self.pos == 0 {
             None
         } else {
-            self.remaining -= 1;
-            Some(None)
-        }
+            self.names
+                .get(self.pos - 1)
+                .and_then(|name| name.as_deref())
+        };
+        self.pos += 1;
+        Some(item)
     }
 }
 
@@ -924,7 +1021,8 @@ impl<'h> core::ops::Index<&str> for Captures<'h> {
     ///
     /// ## Panics
     ///
-    /// Panics because named capture groups are not currently supported.
+    /// Panics if `name` does not correspond to a named capture group or if the
+    /// group did not participate in the match.
     fn index(&self, name: &str) -> &Self::Output {
         self.name(name).unwrap().as_bytes()
     }
@@ -1026,6 +1124,7 @@ impl<'r, 'h> Iterator for CaptureMatches<'r, 'h> {
         Some(Captures {
             haystack: self.haystack,
             slots,
+            names: self.re.capture_names.clone(),
         })
     }
 
@@ -1108,6 +1207,33 @@ fn expand(template: &[u8], caps: &Captures<'_>, dst: &mut Vec<u8>) {
             }
             if saw {
                 if let Some(m) = caps.get(n) {
+                    dst.extend_from_slice(m.as_bytes());
+                }
+            } else if i < template.len() && template[i] == b'{' {
+                i += 1;
+                let start = i;
+                while i < template.len() && template[i] != b'}' {
+                    i += 1;
+                }
+                let name = core::str::from_utf8(&template[start..i]).ok();
+                if i < template.len() && template[i] == b'}' {
+                    i += 1;
+                }
+                if let Some(m) = name.and_then(|name| caps.name(name)) {
+                    dst.extend_from_slice(m.as_bytes());
+                }
+            } else if i < template.len()
+                && (template[i].is_ascii_alphabetic() || template[i] == b'_')
+            {
+                let start = i;
+                while i < template.len()
+                    && (template[i].is_ascii_alphanumeric() || template[i] == b'_')
+                {
+                    i += 1;
+                }
+                if let Ok(name) = core::str::from_utf8(&template[start..i])
+                    && let Some(m) = caps.name(name)
+                {
                     dst.extend_from_slice(m.as_bytes());
                 }
             } else if i < template.len() && template[i] == b'$' {

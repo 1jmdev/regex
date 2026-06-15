@@ -1,4 +1,4 @@
-use regex::bytes::{Regex, RegexSet};
+use regex::bytes::{Regex, RegexBuilder, RegexSet, RegexSetBuilder};
 
 fn assert_same(pattern: &str, haystack: &[u8]) {
     let fast = Regex::new(pattern).unwrap();
@@ -93,6 +93,56 @@ fn bytes_fast_patterns_match_regex_crate() {
 }
 
 #[test]
+fn bytes_extended_syntax() {
+    let re = Regex::new(r"(?:cat|dog)s?").unwrap();
+    assert_eq!(re.captures_len(), 1);
+    assert!(re.is_match(b"dogs"));
+
+    assert!(Regex::new(r"a(?i:b)c").unwrap().is_match(b"aBc"));
+    assert!(Regex::new(r"(?m)^bar$").unwrap().is_match(b"foo\nbar\nbaz"));
+    assert!(Regex::new(r"(?s)a.c").unwrap().is_match(b"a\nc"));
+    assert!(Regex::new(r"\Aabc\z").unwrap().is_match(b"abc"));
+    assert!(Regex::new(r"\x41\u0042\u{43}").unwrap().is_match(b"ABC"));
+    assert!(Regex::new(r"ab{,3}c").unwrap().is_match(b"abbbc"));
+}
+
+#[test]
+fn bytes_builder_extra_options_are_enforced() {
+    let re = RegexBuilder::new(r"(?m)^bar$").crlf(true).build().unwrap();
+    assert!(re.is_match(b"foo\r\nbar\r\nbaz"));
+
+    assert!(RegexBuilder::new(r"\141").build().is_err());
+    assert!(
+        RegexBuilder::new(r"\141")
+            .octal(true)
+            .build()
+            .unwrap()
+            .is_match(b"a")
+    );
+    assert!(RegexBuilder::new(r"\u{61}").unicode(false).build().is_err());
+    assert!(RegexBuilder::new(r"(a)").nest_limit(0).build().is_err());
+    assert!(RegexBuilder::new(r"abcdef").size_limit(2).build().is_err());
+}
+
+#[test]
+fn bytes_named_captures_and_replacements() {
+    let re = Regex::new(r"(?P<key>\w+)=(?<value>\d+)").unwrap();
+    let caps = re.captures(b"count=42").unwrap();
+
+    assert_eq!(
+        re.capture_names().collect::<Vec<_>>(),
+        [None, Some("key"), Some("value")]
+    );
+    assert_eq!(caps.name("key").unwrap().as_bytes(), b"count");
+    assert_eq!(caps.name("value").unwrap().as_bytes(), b"42");
+    assert_eq!(&caps["key"], b"count");
+    assert_eq!(
+        re.replace(b"count=42", b"${value}:${key}").as_ref(),
+        b"42:count"
+    );
+}
+
+#[test]
 fn bytes_utf8_pattern_literals_match_encoded_bytes() {
     let re = Regex::new("é+").unwrap();
     let m = re.find("xéé".as_bytes()).unwrap();
@@ -118,4 +168,42 @@ fn bytes_regex_set_reports_matching_pattern_indexes() {
     assert_eq!(matches.iter().collect::<Vec<_>>(), vec![0, 1, 2]);
     assert_eq!((&matches).into_iter().collect::<Vec<_>>(), vec![0, 1, 2]);
     assert_eq!(matches.into_iter().collect::<Vec<_>>(), vec![0, 1, 2]);
+}
+
+#[test]
+fn bytes_regex_set_builder_flags_apply_to_patterns() {
+    let set = RegexSetBuilder::new([r"^bar$", r"a.c", r"a b"])
+        .multi_line(true)
+        .dot_matches_new_line(true)
+        .ignore_whitespace(true)
+        .build()
+        .unwrap();
+
+    assert!(set.matches(b"foo\nbar\nbaz").matched(0));
+    assert!(set.matches(b"a\nc").matched(1));
+    assert!(set.matches(b"ab").matched(2));
+}
+
+#[test]
+fn bytes_regex_set_builder_extra_options_apply_to_patterns() {
+    let set = RegexSetBuilder::new([r"(?m)^bar$", r"\141"])
+        .crlf(true)
+        .octal(true)
+        .build()
+        .unwrap();
+
+    assert!(set.matches(b"foo\r\nbar\r\na").matched(0));
+    assert!(set.matches(b"foo\r\nbar\r\na").matched(1));
+    assert!(
+        RegexSetBuilder::new([r"(a)"])
+            .nest_limit(0)
+            .build()
+            .is_err()
+    );
+    assert!(
+        RegexSetBuilder::new([r"abcdef"])
+            .size_limit(2)
+            .build()
+            .is_err()
+    );
 }

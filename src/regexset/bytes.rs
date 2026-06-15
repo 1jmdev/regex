@@ -29,8 +29,7 @@ pub struct RegexSet {
 /// A configurable builder for compiling byte [`RegexSet`] values.
 ///
 /// `RegexSetBuilder` lets you construct a set of byte regexes while setting
-/// options before compilation. Options that are not supported by this engine
-/// are accepted for API compatibility and leave matching behavior unchanged.
+/// syntax and matching options before compilation.
 ///
 /// ## Example
 ///
@@ -48,6 +47,16 @@ pub struct RegexSet {
 pub struct RegexSetBuilder {
     patterns: Vec<String>,
     case_insensitive: bool,
+    multi_line: bool,
+    dot_matches_new_line: bool,
+    swap_greed: bool,
+    ignore_whitespace: bool,
+    crlf: bool,
+    unicode: bool,
+    octal: bool,
+    size_limit: Option<usize>,
+    dfa_size_limit: Option<usize>,
+    nest_limit: Option<u32>,
 }
 
 /// The set of pattern indexes that matched a byte haystack.
@@ -152,6 +161,16 @@ impl RegexSetBuilder {
                 .map(|p| p.as_ref().to_owned())
                 .collect(),
             case_insensitive: false,
+            multi_line: false,
+            dot_matches_new_line: false,
+            swap_greed: false,
+            ignore_whitespace: false,
+            crlf: false,
+            unicode: true,
+            octal: false,
+            size_limit: None,
+            dfa_size_limit: None,
+            nest_limit: None,
         }
     }
 
@@ -175,6 +194,22 @@ impl RegexSetBuilder {
         for pattern in &self.patterns {
             let mut builder = RegexBuilder::new(pattern);
             builder.case_insensitive(self.case_insensitive);
+            builder.multi_line(self.multi_line);
+            builder.dot_matches_new_line(self.dot_matches_new_line);
+            builder.crlf(self.crlf);
+            builder.swap_greed(self.swap_greed);
+            builder.ignore_whitespace(self.ignore_whitespace);
+            builder.unicode(self.unicode);
+            builder.octal(self.octal);
+            if let Some(limit) = self.size_limit {
+                builder.size_limit(limit);
+            }
+            if let Some(limit) = self.dfa_size_limit {
+                builder.dfa_size_limit(limit);
+            }
+            if let Some(limit) = self.nest_limit {
+                builder.nest_limit(limit);
+            }
             regexes.push(builder.build()?);
             stored.push(pattern.clone());
         }
@@ -206,81 +241,85 @@ impl RegexSetBuilder {
 
     /// Enable or disable multi-line mode.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn multi_line(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, `^` and `$` also match after and before `\n`.
+    pub fn multi_line(&mut self, yes: bool) -> &mut Self {
+        self.multi_line = yes;
         self
     }
 
     /// Enable or disable allowing `.` to match `\n`.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn dot_matches_new_line(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, `.` matches newline bytes.
+    pub fn dot_matches_new_line(&mut self, yes: bool) -> &mut Self {
+        self.dot_matches_new_line = yes;
         self
     }
 
     /// Enable or disable CRLF-aware line anchors.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn crlf(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, `^` and `$` treat `\r\n` as one line terminator.
+    pub fn crlf(&mut self, yes: bool) -> &mut Self {
+        self.crlf = yes;
         self
     }
 
     /// Enable or disable swapping greediness for repetition operators.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn swap_greed(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, repetition operators are non-greedy by default and `?`
+    /// makes them greedy.
+    pub fn swap_greed(&mut self, yes: bool) -> &mut Self {
+        self.swap_greed = yes;
         self
     }
 
     /// Enable or disable insignificant whitespace mode.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn ignore_whitespace(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, whitespace in patterns is ignored.
+    pub fn ignore_whitespace(&mut self, yes: bool) -> &mut Self {
+        self.ignore_whitespace = yes;
         self
     }
 
     /// Enable or disable Unicode mode.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn unicode(&mut self, _yes: bool) -> &mut Self {
+    /// When disabled, Unicode escapes and properties such as `\u{2603}` and
+    /// `\p{Letter}` are rejected at compile time.
+    pub fn unicode(&mut self, yes: bool) -> &mut Self {
+        self.unicode = yes;
         self
     }
 
     /// Enable or disable octal escape syntax.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn octal(&mut self, _yes: bool) -> &mut Self {
+    /// When enabled, octal escapes such as `\141` are accepted.
+    pub fn octal(&mut self, yes: bool) -> &mut Self {
+        self.octal = yes;
         self
     }
 
     /// Set the approximate compiled regex size limit.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn size_limit(&mut self, _limit: usize) -> &mut Self {
+    /// Compilation fails if the parsed expression exceeds this approximate AST
+    /// node limit.
+    pub fn size_limit(&mut self, limit: usize) -> &mut Self {
+        self.size_limit = Some(limit);
         self
     }
 
     /// Set the approximate DFA cache size limit.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn dfa_size_limit(&mut self, _limit: usize) -> &mut Self {
+    /// Records the DFA cache size requested by callers. This engine is an AST
+    /// interpreter, so matching does not allocate a DFA cache.
+    pub fn dfa_size_limit(&mut self, limit: usize) -> &mut Self {
+        self.dfa_size_limit = Some(limit);
         self
     }
 
     /// Set the nesting limit used while compiling a regex set.
     ///
-    /// This option is accepted for API compatibility and currently leaves
-    /// matching behavior unchanged.
-    pub fn nest_limit(&mut self, _limit: u32) -> &mut Self {
+    /// Compilation fails when parenthesized group nesting exceeds `limit`.
+    pub fn nest_limit(&mut self, limit: u32) -> &mut Self {
+        self.nest_limit = Some(limit);
         self
     }
 }

@@ -77,22 +77,46 @@ pub fn matches(ast: &Ast, s: &str, pos: usize, slots: Slots) -> Vec<(usize, Slot
             Some((x, end)) if x == *c => vec![(end, slots)],
             _ => Vec::new(),
         },
-        Ast::Dot => match next_char(s, pos) {
-            Some(('\n', _)) | None => Vec::new(),
+        Ast::Dot { matches_new_line } => match next_char(s, pos) {
+            Some(('\n', _)) if !matches_new_line => Vec::new(),
+            None => Vec::new(),
             Some((_, end)) => vec![(end, slots)],
         },
         Ast::Class(class) => match next_char(s, pos) {
             Some((c, end)) if class.matches(c) => vec![(end, slots)],
             _ => Vec::new(),
         },
-        Ast::StartLine => {
+        Ast::StartLine { multi_line, crlf } => {
+            if pos == 0
+                || (*multi_line
+                    && prev_char(s, pos) == Some('\n')
+                    && (!*crlf || next_char(s, pos).is_none_or(|(c, _)| c != '\r')))
+            {
+                vec![(pos, slots)]
+            } else {
+                Vec::new()
+            }
+        }
+        Ast::EndLine { multi_line, crlf } => {
+            if pos == s.len()
+                || (*multi_line && next_char(s, pos).is_some_and(|(c, _)| c == '\n'))
+                || (*crlf
+                    && next_char(s, pos).is_some_and(|(c, _)| c == '\r')
+                    && s.get(pos + 1..).is_some_and(|rest| rest.starts_with('\n')))
+            {
+                vec![(pos, slots)]
+            } else {
+                Vec::new()
+            }
+        }
+        Ast::StartText => {
             if pos == 0 {
                 vec![(pos, slots)]
             } else {
                 Vec::new()
             }
         }
-        Ast::EndLine => {
+        Ast::EndText => {
             if pos == s.len() {
                 vec![(pos, slots)]
             } else {
