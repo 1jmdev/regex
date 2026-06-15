@@ -63,12 +63,13 @@ fn bytes_split_and_replace() {
     assert_eq!(parts, vec![&b"a"[..], &b"b"[..], &b"c\xff"[..]]);
 
     let re = Regex::new(r"(\w+)=(\d+)").unwrap();
-    assert_eq!(re.replace(b"x=12 y=3", b"$2:$1"), b"12:x y=3");
-    assert_eq!(re.replace_all(b"x=12 y=3", b"$2:$1"), b"12:x 3:y");
+    assert_eq!(re.replace(b"x=12 y=3", b"$2:$1").as_ref(), b"12:x y=3");
+    assert_eq!(re.replace_all(b"x=12 y=3", b"$2:$1").as_ref(), b"12:x 3:y");
     assert_eq!(
         re.replace_all(b"x=12", |caps: &regex::bytes::Captures<'_>| {
             caps[2].to_vec()
-        }),
+        })
+        .as_ref(),
         b"12"
     );
 }

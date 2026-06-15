@@ -1,5 +1,8 @@
 mod api;
 mod matcher;
 
-pub use crate::regexset::bytes::{RegexSet, SetMatches, SetMatchesIter};
-pub use api::{CaptureMatches, Captures, FindMatches, Match, Regex, Replacer, Split};
+pub use crate::regexset::bytes::{RegexSet, RegexSetBuilder, SetMatches, SetMatchesIter};
+pub use api::{
+    CaptureMatches, CaptureNames, Captures, FindMatches, Match, Regex, RegexBuilder, Replacer,
+    Split, SplitN,
+};

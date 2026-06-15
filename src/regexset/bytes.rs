@@ -1,4 +1,4 @@
-use crate::{bytes::Regex, error::Error};
+use crate::{bytes::Regex, bytes::RegexBuilder, error::Error};
 
 /// A compiled set of regular expressions for searching byte haystacks.
 ///
@@ -24,6 +24,30 @@ use crate::{bytes::Regex, error::Error};
 pub struct RegexSet {
     patterns: Vec<String>,
     regexes: Vec<Regex>,
+}
+
+/// A configurable builder for compiling byte [`RegexSet`] values.
+///
+/// `RegexSetBuilder` lets you construct a set of byte regexes while setting
+/// options before compilation. Options that are not supported by this engine
+/// are accepted for API compatibility and leave matching behavior unchanged.
+///
+/// ## Example
+///
+/// ```
+/// use regex::bytes::RegexSetBuilder;
+///
+/// let set = RegexSetBuilder::new(["abc", "def"])
+///     .case_insensitive(true)
+///     .build()
+///     .unwrap();
+///
+/// assert!(set.is_match(b"ABC"));
+/// ```
+#[derive(Clone, Debug)]
+pub struct RegexSetBuilder {
+    patterns: Vec<String>,
+    case_insensitive: bool,
 }
 
 /// The set of pattern indexes that matched a byte haystack.
@@ -100,6 +124,164 @@ impl RegexSet {
                 .map(|re| re.is_match(haystack))
                 .collect(),
         }
+    }
+}
+
+impl RegexSetBuilder {
+    /// Create a new builder for a set of regex patterns.
+    ///
+    /// The builder can be configured with option methods and then compiled
+    /// with [`build`](RegexSetBuilder::build).
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::RegexSetBuilder;
+    ///
+    /// let set = RegexSetBuilder::new([r"\d+", r"\w+"]).build().unwrap();
+    /// assert_eq!(set.len(), 2);
+    /// ```
+    pub fn new<I, P>(patterns: I) -> Self
+    where
+        I: IntoIterator<Item = P>,
+        P: AsRef<str>,
+    {
+        Self {
+            patterns: patterns
+                .into_iter()
+                .map(|p| p.as_ref().to_owned())
+                .collect(),
+            case_insensitive: false,
+        }
+    }
+
+    /// Compile the configured regex set.
+    ///
+    /// Returns an [`Error`] if any pattern contains invalid syntax.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::RegexSetBuilder;
+    ///
+    /// let set = RegexSetBuilder::new([r"\d+", r"\w+"]).build().unwrap();
+    /// assert!(set.is_match(b"abc 123"));
+    ///
+    /// assert!(RegexSetBuilder::new([r"[unclosed"]).build().is_err());
+    /// ```
+    pub fn build(&self) -> Result<RegexSet, Error> {
+        let mut stored = Vec::new();
+        let mut regexes = Vec::new();
+        for pattern in &self.patterns {
+            let mut builder = RegexBuilder::new(pattern);
+            builder.case_insensitive(self.case_insensitive);
+            regexes.push(builder.build()?);
+            stored.push(pattern.clone());
+        }
+        Ok(RegexSet {
+            patterns: stored,
+            regexes,
+        })
+    }
+
+    /// Enable or disable ASCII case-insensitive matching for every pattern.
+    ///
+    /// This has the same effect as prefixing every pattern with `(?i)`.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::RegexSetBuilder;
+    ///
+    /// let set = RegexSetBuilder::new(["abc"])
+    ///     .case_insensitive(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(set.is_match(b"ABC"));
+    /// ```
+    pub fn case_insensitive(&mut self, yes: bool) -> &mut Self {
+        self.case_insensitive = yes;
+        self
+    }
+
+    /// Enable or disable multi-line mode.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn multi_line(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable allowing `.` to match `\n`.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn dot_matches_new_line(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable CRLF-aware line anchors.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn crlf(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable swapping greediness for repetition operators.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn swap_greed(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable insignificant whitespace mode.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn ignore_whitespace(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable Unicode mode.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn unicode(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable octal escape syntax.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn octal(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Set the approximate compiled regex size limit.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn size_limit(&mut self, _limit: usize) -> &mut Self {
+        self
+    }
+
+    /// Set the approximate DFA cache size limit.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn dfa_size_limit(&mut self, _limit: usize) -> &mut Self {
+        self
+    }
+
+    /// Set the nesting limit used while compiling a regex set.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn nest_limit(&mut self, _limit: u32) -> &mut Self {
+        self
     }
 }
 

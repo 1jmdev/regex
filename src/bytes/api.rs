@@ -9,6 +9,7 @@ use crate::{
 };
 
 use super::matcher;
+use std::{borrow::Cow, fmt};
 
 /// A compiled regular expression for searching byte haystacks.
 ///
@@ -72,7 +73,7 @@ use super::matcher;
 /// let result = re.replace(b"hello world", |caps: &Captures<'_>| {
 ///     caps[1].to_ascii_uppercase()
 /// });
-/// assert_eq!(result, b"HELLO world");
+/// assert_eq!(result.as_ref(), b"HELLO world");
 /// ```
 #[derive(Clone, Debug)]
 pub struct Regex {
@@ -81,6 +82,30 @@ pub struct Regex {
     captures: usize,
     prefix: Option<u8>,
     fast: Fast,
+}
+
+/// A configurable builder for compiling byte [`Regex`] values.
+///
+/// `RegexBuilder` lets you construct a byte regex while setting options before
+/// compilation. Options that are not supported by this engine are accepted for
+/// API compatibility and leave matching behavior unchanged.
+///
+/// ## Example
+///
+/// ```
+/// use regex::bytes::RegexBuilder;
+///
+/// let re = RegexBuilder::new(r"abc")
+///     .case_insensitive(true)
+///     .build()
+///     .unwrap();
+///
+/// assert!(re.is_match(b"ABC"));
+/// ```
+#[derive(Clone, Debug)]
+pub struct RegexBuilder {
+    pattern: String,
+    case_insensitive: bool,
 }
 
 /// A single contiguous match within a haystack.
@@ -205,6 +230,45 @@ pub struct Split<'r, 'h> {
     finished: bool,
 }
 
+/// An iterator over at most `n` byte slices of a haystack split by a [`Regex`].
+///
+/// Created by [`Regex::splitn`]. Yields the parts of the haystack that lie
+/// between successive matches, stopping after the configured limit.
+///
+/// ## Example
+///
+/// ```
+/// use regex::bytes::Regex;
+///
+/// let re = Regex::new(r",\s*").unwrap();
+/// let fields: Vec<&[u8]> = re.splitn(b"one, two, three", 2).collect();
+/// assert_eq!(fields, [&b"one"[..], &b"two, three"[..]]);
+/// ```
+pub struct SplitN<'r, 'h> {
+    splits: Split<'r, 'h>,
+    limit: usize,
+    count: usize,
+}
+
+/// An iterator over the capture group names in a [`Regex`].
+///
+/// Created by [`Regex::capture_names`]. Group `0` is always unnamed. This
+/// engine does not currently support named capture syntax, so every item
+/// yielded is `None`.
+///
+/// ## Example
+///
+/// ```
+/// use regex::bytes::Regex;
+///
+/// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
+/// let names: Vec<Option<&str>> = re.capture_names().collect();
+/// assert_eq!(names, [None, None, None]);
+/// ```
+pub struct CaptureNames {
+    remaining: usize,
+}
+
 /// A type that can produce replacement bytes for a [`Regex`] substitution.
 ///
 /// Implement this trait to control how matched bytes are replaced in
@@ -224,7 +288,7 @@ pub struct Split<'r, 'h> {
 ///
 /// let re = Regex::new(r"(\w+)\s(\w+)").unwrap();
 /// let result = re.replace(b"hello world", b"$2 $1");
-/// assert_eq!(result, b"world hello");
+/// assert_eq!(result.as_ref(), b"world hello");
 /// ```
 pub trait Replacer {
     /// Appends replacement bytes for `caps` to `dst`.
@@ -271,6 +335,60 @@ impl Regex {
         &self.pattern
     }
 
+    /// Returns the number of capture groups in this regex.
+    ///
+    /// The count includes group `0`, which is always the entire match. Each
+    /// explicit parenthesised group increments the count by one.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::Regex;
+    ///
+    /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
+    /// assert_eq!(re.captures_len(), 3);
+    /// ```
+    pub fn captures_len(&self) -> usize {
+        self.captures + 1
+    }
+
+    /// Returns an iterator over the capture group names in this regex.
+    ///
+    /// Group `0` is always unnamed. This engine does not currently support
+    /// named capture syntax, so every item yielded is `None`.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::Regex;
+    ///
+    /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
+    /// let names: Vec<Option<&str>> = re.capture_names().collect();
+    /// assert_eq!(names, [None, None, None]);
+    /// ```
+    pub fn capture_names(&self) -> CaptureNames {
+        CaptureNames {
+            remaining: self.captures_len(),
+        }
+    }
+
+    /// Returns the static number of captures for this regex, if it is known.
+    ///
+    /// This engine knows the capture count for every compiled regex, so this
+    /// always returns `Some`.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::Regex;
+    ///
+    /// let re = Regex::new(r"(\w+)=(\d+)").unwrap();
+    /// assert_eq!(re.static_captures_len(), Some(3));
+    /// ```
+    pub fn static_captures_len(&self) -> Option<usize> {
+        Some(self.captures_len())
+    }
+
     /// Returns `true` if and only if there is a match for the regex anywhere
     /// in the haystack.
     ///
@@ -295,6 +413,11 @@ impl Regex {
         self.find(haystack).is_some()
     }
 
+    /// Returns `true` if and only if there is a match at or after `start`.
+    pub fn is_match_at(&self, haystack: &[u8], start: usize) -> bool {
+        self.find_at(haystack, start).is_some()
+    }
+
     /// Returns the leftmost [`Match`] in `haystack`, or `None` if no match
     /// exists.
     ///
@@ -310,6 +433,18 @@ impl Regex {
     /// ```
     pub fn find<'h>(&self, haystack: &'h [u8]) -> Option<Match<'h>> {
         self.captures(haystack).and_then(|c| c.get(0))
+    }
+
+    /// Returns the leftmost [`Match`] in `haystack` at or after `start`, or
+    /// `None` if no match exists.
+    pub fn find_at<'h>(&self, haystack: &'h [u8], start: usize) -> Option<Match<'h>> {
+        self.captures_at(haystack, start).and_then(|c| c.get(0))
+    }
+
+    /// Returns the end offset of the leftmost match, or `None` if no match
+    /// exists.
+    pub fn shortest_match(&self, haystack: &[u8]) -> Option<usize> {
+        self.find(haystack).map(|m| m.end())
     }
 
     /// Returns the leftmost [`Captures`] for this regex in `haystack`, or
@@ -331,12 +466,26 @@ impl Regex {
     /// ```
     #[inline(always)]
     pub fn captures<'h>(&self, haystack: &'h [u8]) -> Option<Captures<'h>> {
+        self.captures_at(haystack, 0)
+    }
+
+    /// Returns the leftmost [`Captures`] in `haystack` at or after `start`, or
+    /// `None` if no match exists.
+    #[inline(always)]
+    pub fn captures_at<'h>(&self, haystack: &'h [u8], start: usize) -> Option<Captures<'h>> {
         if let Some(slots) = fast::find_bytes(self.fast, haystack, 0) {
+            if slots.get(0).is_some_and(|(s, _)| s >= start) {
+                return Some(Captures { haystack, slots });
+            }
+        }
+        if let Some(slots) = fast::find_bytes(self.fast, haystack, start) {
             return Some(Captures { haystack, slots });
         }
-        matcher::find(&self.ast, haystack, self.captures, 0, self.prefix).map(|slots| Captures {
-            haystack,
-            slots: Slots::Heap(slots),
+        matcher::find(&self.ast, haystack, self.captures, start, self.prefix).map(|slots| {
+            Captures {
+                haystack,
+                slots: Slots::Heap(slots),
+            }
         })
     }
 
@@ -411,35 +560,27 @@ impl Regex {
         }
     }
 
-    /// Returns a new `Vec<u8>` with the first match replaced by the output of
-    /// `rep`.
-    ///
-    /// If no match is found the haystack is returned unchanged.
-    ///
-    /// `rep` can be a `&[u8]` or `Vec<u8>` with `$1`-style group references, or
-    /// a `FnMut(&Captures) -> Vec<u8>` closure. See [`Replacer`] for details.
+    /// Returns an iterator over at most `limit` byte slices of `haystack`
+    /// delimited by matches of this regex.
     ///
     /// ## Example
     ///
     /// ```
     /// use regex::bytes::Regex;
     ///
-    /// let re = Regex::new(r"\d+").unwrap();
-    /// assert_eq!(re.replace(b"foo 1 bar 2", b"X"), b"foo X bar 2");
+    /// let re = Regex::new(r",\s*").unwrap();
+    /// let fields: Vec<&[u8]> = re.splitn(b"one, two, three", 2).collect();
+    /// assert_eq!(fields, [&b"one"[..], &b"two, three"[..]]);
     /// ```
-    pub fn replace<R: Replacer>(&self, haystack: &[u8], mut rep: R) -> Vec<u8> {
-        let Some(caps) = self.captures(haystack) else {
-            return haystack.to_vec();
-        };
-        let m = caps.get(0).unwrap();
-        let mut dst = Vec::with_capacity(haystack.len());
-        dst.extend_from_slice(&haystack[..m.start]);
-        rep.replace_append(&caps, &mut dst);
-        dst.extend_from_slice(&haystack[m.end..]);
-        dst
+    pub fn splitn<'r, 'h>(&'r self, haystack: &'h [u8], limit: usize) -> SplitN<'r, 'h> {
+        SplitN {
+            splits: self.split(haystack),
+            limit,
+            count: 0,
+        }
     }
 
-    /// Returns a new `Vec<u8>` with every non-overlapping match replaced by
+    /// Returns a copy-on-write byte string with the first match replaced by
     /// the output of `rep`.
     ///
     /// If no match is found the haystack is returned unchanged.
@@ -453,21 +594,229 @@ impl Regex {
     /// use regex::bytes::Regex;
     ///
     /// let re = Regex::new(r"\d+").unwrap();
-    /// assert_eq!(re.replace_all(b"foo 1 bar 2 baz 3", b"X"), b"foo X bar X baz X");
+    /// assert_eq!(re.replace(b"foo 1 bar 2", b"X").as_ref(), b"foo X bar 2");
     /// ```
-    pub fn replace_all<R: Replacer>(&self, haystack: &[u8], mut rep: R) -> Vec<u8> {
+    pub fn replace<'h, R: Replacer>(&self, haystack: &'h [u8], mut rep: R) -> Cow<'h, [u8]> {
+        let Some(caps) = self.captures(haystack) else {
+            return Cow::Borrowed(haystack);
+        };
+        let m = caps.get(0).unwrap();
+        let mut dst = Vec::with_capacity(haystack.len());
+        dst.extend_from_slice(&haystack[..m.start]);
+        rep.replace_append(&caps, &mut dst);
+        dst.extend_from_slice(&haystack[m.end..]);
+        Cow::Owned(dst)
+    }
+
+    /// Returns a copy-on-write byte string with every non-overlapping match
+    /// replaced by the output of `rep`.
+    ///
+    /// If no match is found the haystack is returned unchanged.
+    ///
+    /// `rep` can be a `&[u8]` or `Vec<u8>` with `$1`-style group references, or
+    /// a `FnMut(&Captures) -> Vec<u8>` closure. See [`Replacer`] for details.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::Regex;
+    ///
+    /// let re = Regex::new(r"\d+").unwrap();
+    /// assert_eq!(re.replace_all(b"foo 1 bar 2 baz 3", b"X").as_ref(), b"foo X bar X baz X");
+    /// ```
+    pub fn replace_all<'h, R: Replacer>(&self, haystack: &'h [u8], rep: R) -> Cow<'h, [u8]> {
+        self.replacen(haystack, 0, rep)
+    }
+
+    /// Returns a copy-on-write byte string with at most `limit` non-overlapping
+    /// matches replaced by the output of `rep`.
+    ///
+    /// A `limit` of `0` replaces every match.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::Regex;
+    ///
+    /// let re = Regex::new(r"\d+").unwrap();
+    /// assert_eq!(re.replacen(b"foo 1 bar 2 baz 3", 2, b"X").as_ref(), b"foo X bar X baz 3");
+    /// ```
+    pub fn replacen<'h, R: Replacer>(
+        &self,
+        haystack: &'h [u8],
+        limit: usize,
+        mut rep: R,
+    ) -> Cow<'h, [u8]> {
         let mut dst = Vec::with_capacity(haystack.len());
         let mut last = 0;
-        for caps in self.captures_iter(haystack) {
+        let mut matched = false;
+        for (i, caps) in self.captures_iter(haystack).enumerate() {
+            if limit != 0 && i >= limit {
+                break;
+            }
             let Some(m) = caps.get(0) else {
                 continue;
             };
+            matched = true;
             dst.extend_from_slice(&haystack[last..m.start]);
             rep.replace_append(&caps, &mut dst);
             last = m.end;
         }
+        if !matched {
+            return Cow::Borrowed(haystack);
+        }
         dst.extend_from_slice(&haystack[last..]);
-        dst
+        Cow::Owned(dst)
+    }
+}
+
+impl RegexBuilder {
+    /// Create a new builder for `pattern`.
+    ///
+    /// The builder can be configured with option methods and then compiled
+    /// with [`build`](RegexBuilder::build).
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::RegexBuilder;
+    ///
+    /// let re = RegexBuilder::new(r"\d+").build().unwrap();
+    /// assert!(re.is_match(b"abc 123"));
+    /// ```
+    pub fn new(pattern: &str) -> Self {
+        Self {
+            pattern: pattern.to_owned(),
+            case_insensitive: false,
+        }
+    }
+
+    /// Compile the configured regex.
+    ///
+    /// Returns an [`Error`] if the pattern contains invalid syntax.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::RegexBuilder;
+    ///
+    /// let re = RegexBuilder::new(r"\w+").build().unwrap();
+    /// assert!(re.is_match(b"word"));
+    ///
+    /// assert!(RegexBuilder::new(r"[unclosed").build().is_err());
+    /// ```
+    pub fn build(&self) -> Result<Regex, Error> {
+        if self.case_insensitive {
+            Regex::new(&format!("(?i){}", self.pattern))
+        } else {
+            Regex::new(&self.pattern)
+        }
+    }
+
+    /// Enable or disable ASCII case-insensitive matching.
+    ///
+    /// This has the same effect as prefixing the pattern with `(?i)`.
+    ///
+    /// ## Example
+    ///
+    /// ```
+    /// use regex::bytes::RegexBuilder;
+    ///
+    /// let re = RegexBuilder::new("abc")
+    ///     .case_insensitive(true)
+    ///     .build()
+    ///     .unwrap();
+    /// assert!(re.is_match(b"ABC"));
+    /// ```
+    pub fn case_insensitive(&mut self, yes: bool) -> &mut Self {
+        self.case_insensitive = yes;
+        self
+    }
+
+    /// Enable or disable multi-line mode.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn multi_line(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable allowing `.` to match `\n`.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn dot_matches_new_line(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable CRLF-aware line anchors.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn crlf(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable swapping greediness for repetition operators.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn swap_greed(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable insignificant whitespace mode.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn ignore_whitespace(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable Unicode mode.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn unicode(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Enable or disable octal escape syntax.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn octal(&mut self, _yes: bool) -> &mut Self {
+        self
+    }
+
+    /// Set the approximate compiled regex size limit.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn size_limit(&mut self, _limit: usize) -> &mut Self {
+        self
+    }
+
+    /// Set the approximate DFA cache size limit.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn dfa_size_limit(&mut self, _limit: usize) -> &mut Self {
+        self
+    }
+
+    /// Set the nesting limit used while compiling a regex.
+    ///
+    /// This option is accepted for API compatibility and currently leaves
+    /// matching behavior unchanged.
+    pub fn nest_limit(&mut self, _limit: u32) -> &mut Self {
+        self
+    }
+}
+
+impl fmt::Display for Regex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 
@@ -519,6 +868,12 @@ impl<'h> Captures<'h> {
         })
     }
 
+    /// Returns the capture group with the given name, or `None` if no such
+    /// group exists or the group did not participate in the match.
+    pub fn name(&self, _name: &str) -> Option<Match<'h>> {
+        None
+    }
+
     /// Returns the total number of capture slots (including group 0).
     pub fn len(&self) -> usize {
         self.slots.len()
@@ -527,6 +882,51 @@ impl<'h> Captures<'h> {
     /// Returns `true` if there are no capture slots.
     pub fn is_empty(&self) -> bool {
         self.slots.len() == 0
+    }
+}
+
+impl Iterator for CaptureNames {
+    type Item = Option<&'static str>;
+
+    /// Advances the iterator and returns the next capture name, or `None` when exhausted.
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.remaining == 0 {
+            None
+        } else {
+            self.remaining -= 1;
+            Some(None)
+        }
+    }
+}
+
+impl<'r, 'h> Iterator for SplitN<'r, 'h> {
+    type Item = &'h [u8];
+
+    /// Advances the iterator and returns the next split slice, or `None` when exhausted.
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.count >= self.limit {
+            return None;
+        }
+        self.count += 1;
+        if self.count == self.limit {
+            self.splits.finished = true;
+            Some(&self.splits.matches.haystack[self.splits.last..])
+        } else {
+            self.splits.next()
+        }
+    }
+}
+
+impl<'h> core::ops::Index<&str> for Captures<'h> {
+    type Output = [u8];
+
+    /// Returns the bytes of a named capture group.
+    ///
+    /// ## Panics
+    ///
+    /// Panics because named capture groups are not currently supported.
+    fn index(&self, name: &str) -> &Self::Output {
+        self.name(name).unwrap().as_bytes()
     }
 }
 

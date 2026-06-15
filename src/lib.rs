@@ -9,6 +9,6 @@ pub mod bytes;
 
 pub use error::Error;
 pub use regex::{
-    CaptureMatches, Captures, FindMatches, Match, Regex, RegexSet, Replacer, SetMatches,
-    SetMatchesIter, Split,
+    CaptureMatches, CaptureNames, Captures, FindMatches, Match, Regex, RegexBuilder, RegexSet,
+    RegexSetBuilder, Replacer, SetMatches, SetMatchesIter, Split, SplitN,
 };

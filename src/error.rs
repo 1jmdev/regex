@@ -15,23 +15,23 @@ use core::fmt;
 /// assert!(!err.to_string().is_empty());
 /// ```
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Error {
-    message: String,
+pub enum Error {
+    Syntax(String),
 }
 
 impl Error {
     /// Creates a new `Error` with the given message.
     pub(crate) fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
+        Self::Syntax(message.into())
     }
 }
 
 impl fmt::Display for Error {
     /// Formats the error message for display.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
+        match self {
+            Self::Syntax(message) => f.write_str(message),
+        }
     }
 }
 
